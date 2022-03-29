@@ -44,8 +44,8 @@ MyStatistic {
   // 初始化错误
   initError() {
     window.addEventListener('error', event => {
-      const { error, line, col} = event;
-      this.err(error, { line, col});
+      const { error, lineno, colno } = event;
+      this.err(error, { lineno, colno });
     })
     window.addEventListener('unhandledrejection', event => {
       this.error(new Error(event.reason), {type: 'unhandlerejection'});
