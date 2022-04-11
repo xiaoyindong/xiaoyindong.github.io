@@ -1,4 +1,4 @@
-定义Promise的构造函数，因为创建Promise对象的时候会接收一个函数executor，并且函数会立即被调用，executor函数接收两个函数方法，resolve和reject。调用resolve和reject的时候会传入对应的值。
+首先定义Promise的构造函数，因为创建Promise对象的时候会接收一个函数executor，并且函数会立即被调用，executor函数接收两个函数方法，resolve和reject。调用resolve和reject的时候会传入对应的值。
 
 ```js
 function Promise (executor) {
