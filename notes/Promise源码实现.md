@@ -694,7 +694,7 @@ Promise.allsettled = function(values) {
 }
 ```
 
-## 5. 测试
+## 5. 测试 Promise
 
 可以使用```promises-aplus-tests```测试```Promise```是否符合规范。测试的时候需要提供一段脚本，通过入口进行测试。
 
