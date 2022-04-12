@@ -1,4 +1,4 @@
-首先定义Promise的构造函数，因为创建Promise对象的时候会接收一个函数executor，并且函数会立即被调用，executor函数接收两个函数方法，resolve和reject。调用resolve和reject的时候会传入对应的值。
+定义Promise的构造函数接收一个函数executor，函数会立即执行，executor接收两个函数方法resolve和reject，调用resolve和reject的时候会传入对应的值。
 
 ```js
 function Promise (executor) {
@@ -12,7 +12,7 @@ function Promise (executor) {
 }
 ```
 
-Promise存在3种状态的，等待pending，成功resolved以及失败rejected，状态只可以改变一次，默认是等待状态，可以通过status属性来保存状态，默认pending。状态只可改变一次，只有当状态未发生改变时才去改变状态。成功或失败会传递参数，定义value和reason分别保存。
+Promise存在3种状态的，等待pending，成功resolved以及失败rejected，默认是等待状态，并且状态只可以改变一次，通过status属性来保存状态，只有状态未发生改变时才去改变状态。成功或失败定义value和reason分别保存。
 
 ```js
 function Promise (executor) {
@@ -39,7 +39,7 @@ function Promise (executor) {
 }
 ```
 
-Promise存在then方法，接收两个参数，成功的回调onFulfilled和失败的回调onRejected，方法需要添加在原型上。
+then方法接收两个参数，成功的回调onFulfilled和失败的回调onRejected，添加在原型上。
 
 ```js
 Primsie.prototype.then = function(onFulfilled, onRejected) {
@@ -56,7 +56,7 @@ Primsie.prototype.then = function(onFulfilled, onRejected) {
 
 ## 1. Promise A+规范
 
-```Promise```的概念不是凭空出现的，是[Promise A+规范](https://promisesaplus.com/)中定义的，要求所有实现```Promise```的代码都必须要基于这个规范。
+```Promise```的概念不是凭空出现的，是[Promise A+规范](https://promisesaplus.com/)中定义的，所有实现```Promise```的代码都必须基于这个规范。
 
 > 1.1 “promise”是一个具有then方法的对象或函数，其行为符合此规范。也就是说Promise是一个对象或者函数。
 >
@@ -78,7 +78,7 @@ Primsie.prototype.then = function(onFulfilled, onRejected) {
 > 1.4 如果promise是失败状态，则他不能转换成任何状态，而且需要一个失败的原因，并且这个值不能被改变。
 >
 
-```Promise```需要支持异步逻辑，当```Promise```函数中异步调用```resolve```的时候，```then```方法不会执行。因为```then```方法执行的时候```resolve```并没有执行，也就是```Promise```的状态还未变化。需要改造```Promise```代码。当调用```then```方法的时候可能还是```pending```状态，这个时候应该把```onFulfilled```和```onRejected```先存起来，当执行了```resolve```或者```reject```的时候再执行```onFulfilled```或```onRejected```。这里需要定义两个变量，分别存储```onFulfilled```和```onRejected```。
+Promise需要支持异步逻辑，改造Promise代码当调用then时把onFulfilled和onRejected存起来，等执行了resolve或者reject的时候再执行onFulfilled或onRejected。定义两个变量分别存储onFulfilled和onRejected。
 
 ```js
 function Promise (executor) {
@@ -125,7 +125,7 @@ Primsie.prototype.then = function(onFulfilled, onRejected) {
 }
 ```
 
-成功或者失败的时候，执行```onFulfilled```和```onRejected```的函数。
+成功或者失败时执行onFulfilled和onRejected函数。
 
 ```js
 function resolve(value) {
@@ -151,9 +151,9 @@ function reject(reason) {
 
 ## 2. 链式调用
 
-```Promise```的链式调用和其它对象比如```JQuery```的链式调用有所不同，```Promise```的```then```方法返回的是一个全新的```Promise```，而不是当前的```Promise```。因为```Promise```的状态只能改变一次，如果使用同一个```Promise```的话后面的```then```就失去了成功失败的自由性。
+then方法返回一个全新的Promise，因为Promise的状态只能改变一次，如果使用同一个Promise，后面的then就失去了成功失败的自由性。
 
-在```then```方法之后再去```return```一个新的```Promise```，原本的逻辑放在新创建的```Promise```内部即可，因为他是立即执行的一个函数。这里定义一个```promise2```接收新创建的```Promise```，在函数底部返回出去。还需要拿到```then```方法执行的结果，前一个```then```方法的返回值会传递给下一个then。如果```x```是一个普通值可以直接调用```promise2```的```resolve```方法，将这个值传递出去，这样下一个```then```就可以获取的到，所以执行```resolve(x)```。如果失败需要执行```reject```方法，这里使用```try...catch```捕获错误。
+在then方法之后return一个新的Promise，原本的逻辑放在新创建的Promise内部。拿到then方法执行的结果，前一个then方法的返回值会传递给下一个then。如果x是一个普通值可以直接调用promise2的resolve将值传出去，这样下一个then就可以获取的到。如果失败需要执行reject方法，使用try...catch捕获错误。
 
 ```js
 Primsie.prototype.then = function(onFulfilled, onRejected) {
@@ -199,11 +199,9 @@ Primsie.prototype.then = function(onFulfilled, onRejected) {
 }
 ```
 
-然后```onFulfilled(self.value)```返回的值不一定是一个常量，还可能是个```promise```，需要写一个方法来判断，如果返回值是```promise```就调用```promise```，否则才继续向```resolve```传递。
+onFulfilled(self.value)返回的值不一定是一个常量，还可能是个promise，需要写一个方法来判断，定义resolvePromise方法，在函数中判断返回值x和promse2的关系以及后续的处理。
 
-这里定义一个```resolvePromise```方法，在函数中判断返回值```x```和```promse2```的关系以及后续的处理，所以需要传递```promise2```参数，```x```参数，```resolve```参数和```reject```参数。
-
-这```4```个参数是不能直接传递至```resolvePromise```中的，文档中要求他们不能在当前的上下文，所以要在```try...catch```代码块外层添加```setTimeout```在异步线程中添加。
+这4个参数不能直接传递至resolvePromise，文档要求他们不能在当前的上下文，所以要在try...catch代码块外层添加setTimeout在异步线程中添加。
 
 ```js
 
@@ -264,9 +262,9 @@ Primsie.prototype.then = function(onFulfilled, onRejected) {
 
 ## 3. resolvePromise函数
 
-```resolvePromise```函数的作用是判断```x```是否是```promise```，如果是```promise```就执行并且将执行结果添加到```resolve```方法中，如果是常量则直接添加到```resolve```方法中。这些内容在文档上都可以找得到，具体可以自行翻阅文档，这里就不列出了，直接代码实现。
+判断x是否是promise，如果是就执行并且将执行结果添加到resolve方法中，如果是常量则直接添加到resolve方法中。
 
-首先判断```promise2```和```x```引用了一个相同的对象，也就是他们是同一个```promise```对象。比如下面这种情况。
+首先判断promise2和x引用了一个相同的对象，也就是他们是同一个promise对象。比如下面这种情况。
 
 ```js
 const p = new Promise(function(resolve, reject) {
@@ -287,9 +285,9 @@ function resolvePromise (promise2, x, resolve, reject) {
 }
 ```
 
-如果```x```是```promise```类型，直接使用x的状态，也就是x成功就成功，x失败就失败。如果```x```是对象或者函数，就取他的then方法，获取then方法的时候如果出现异常，就执行失败。因为then方法可能是对象的一个不可访问的方法，get的时候报异常，所以我们需要使用```try...catch```去获取。
+如果x是promise类型，直接使用x的状态，也就是x成功就成功，x失败就失败。如果x是对象或者函数，就取他的then方法，获取then方法的时候如果出现异常，就执行失败。因为then方法可能是对象的一个不可访问的方法，需要使用try...catch去获取。
 
-如果```x```不是```promise```类型，是个普通值，直接调用```resolve```就可以。
+如果x是个普通值，直接调用resolve就可以。
 
 ```js
 function resolvePromise (promise2, x, resolve, reject) {
@@ -309,9 +307,9 @@ function resolvePromise (promise2, x, resolve, reject) {
 }
 ```
 
-接着判断```then```，如果```then```是个函数，就认为他是```Promise```, 需要通过```call```执行```then```方法，改变```this```的指向为```x```，```then```中传入成功和失败的函数，官方文档中指明成功函数的参数叫```y```，失败的参数为```r```。
+如果then是个函数，就认为他是Promise，需要通过call执行，改变this的指向x，then中传入成功和失败的函数，官方文档中指明成功函数的参数叫y，失败的参数为r。
 
-如果```then```不是一个函数那么当前这个``then``是一个普通对象，调用```resolve```方法直接返回即可。
+如果then不是一个函数则是一个普通对象，调用resolve方法直接返回即可。
 
 ```js
 try {
@@ -330,7 +328,7 @@ try {
 }
 ```
 
-```y```有可能也是一个```Promise```，所以不能直接写```resolve(y)```，应该递归判断```y```和```promise2```的关系。因为```then```返回的可能是```Promise```嵌套，也就是```Promise```中仍旧包含```Promise```，在```Promise```的标准中这样的写法是被允许的。所以要用递归来解决，拿到最终的返回，也就是基本类型。需要调用```resolvePromise```。```y```是```then```的成功回调返回的值，和之前的```x```基本一个概念。
+y有可能也是一个Promise，应该递归判断y和promise2的关系，调用resolvePromise，拿到最终的返回，也就是基本类型。
 
 ```js
 try {
@@ -350,7 +348,7 @@ try {
 }
 ```
 
-自己编写的```Promise```可能会和别人的```Promise```嵌套使用，官方文档要求，```Promise```中要书写判断避免因对方```Promise```编写不规范带来的影响。比如对方的```Promise```成功和失败都调用了，或者多次调用了成功。需要使用```called```变量来表示```Promise```有没有被调用过，一旦状态改变就不能再改变了。
+官方文档要求Promise中要书写判断避免别人的Promise编写不规范带来的影响。比如对方的Promise成功和失败都调用了，或者多次调用了成功。使用called变量来表示Promise有没有被调用过，一旦状态改变就不能再改变了。
 
 ```js
 function resolvePromise (promise2, x, resolve, reject) {
@@ -396,8 +394,7 @@ function resolvePromise (promise2, x, resolve, reject) {
 }
 ```
 
-
-当前```Promise```还存在一个小问题，如果```Promise```有多个```then```方法，只在最后一个```then```方法中传递了```onFulfilled```，是需要将```Promise```的返回值传递过去的，也就是下面的代码需要用内容输出，这叫值的穿透。
+如果Promise有多个then方法，只在最后一个then方法中传递了onFulfilled，需要将Promise的返回值传递过去的，也就是下面的代码需要内容输出，这叫值的穿透。
 
 ```js
 p.then().then().then(function(data) {
@@ -405,7 +402,7 @@ p.then().then().then(function(data) {
 })
 ```
 
-实现起来也比较简单，假如用户没有传递```onFulfilled```，或者传入的不是函数，可以给个默认值，也就是这个参数是一个可选参数。
+假如用户没有传递onFulfilled或者传入的不是函数，可以给个默认值，也就是这个参数是一个可选参数。
 
 ```js
 Primsie.prototype.then = function(onFulfilled, onRejected) {
@@ -414,7 +411,7 @@ Primsie.prototype.then = function(onFulfilled, onRejected) {
 }
 ```
 
-最后在调用```executor```的时候也可能会出错，只要```Promise```出现错误，就需要走到```then```的``reject``中，所以这里也需要```try...catch```。
+调用executor的时候也可能会出错，只要Promise出现错误，就需要走到then的reject中。
 
 ```js
 try {
@@ -573,32 +570,7 @@ Promise.prototype.finally = function(handle) {
 }
 ```
 
-## 4. 测试
-
-可以使用```promises-aplus-tests```测试```Promise```是否符合规范。测试的时候需要提供一段脚本，通过入口进行测试。
-
-```js
-Promise.defer = Promise.deferred =  function() {
-    let dfd = {};
-    dft.promise = new Promise((resolve, reject) => {
-        dfd.resolve = resolve;
-        dfd.reject = reject;
-    });
-    return dfd;
-}
-```
-
-```s
-
-# 安装
-npm install promises-aplus-tests -g
-
-# 执行测试脚本
-promises-aplus-tests promise.js
-
-```
-
-## 5. 静态方法实现
+## 4. 静态方法实现
 
 ```js
 // 只要有一个失败就返回，否则返回所有Promise的结果list
@@ -720,4 +692,29 @@ Promise.allsettled = function(values) {
         })
     })
 }
+```
+
+## 5. 测试
+
+可以使用```promises-aplus-tests```测试```Promise```是否符合规范。测试的时候需要提供一段脚本，通过入口进行测试。
+
+```js
+Promise.defer = Promise.deferred =  function() {
+    let dfd = {};
+    dft.promise = new Promise((resolve, reject) => {
+        dfd.resolve = resolve;
+        dfd.reject = reject;
+    });
+    return dfd;
+}
+```
+
+```s
+
+# 安装
+npm install promises-aplus-tests -g
+
+# 执行测试脚本
+promises-aplus-tests promise.js
+
 ```
