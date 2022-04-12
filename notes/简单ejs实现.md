@@ -1,5 +1,3 @@
-## 1. 基本语法实现
-
 定义```render```函数，接收```html```字符串，和```data```参数。
 
 ```js
@@ -39,7 +37,7 @@ const render = (ejs = '', data = {}) => {
 }
 ```
 
-## 2. Function函数
+## Function函数
 
 这里得到的```html```是一个模板字符串。可以通过```Function```将字符串编程可执行的函数。当然这里也可以使用```eval```，随你。
 
@@ -75,7 +73,7 @@ const render = (ejs = '', data = {}) => {
 }
 ```
 
-## 3 with
+## with
 
 这里```render```函数中```props[1]```的实际上是变量名称，也就是```name```和```age```，可以替换成```data[props[1].trim()]```，不过这样写会有一些问题，偷个懒利用```with```代码块的特性。
 
@@ -123,7 +121,7 @@ const render = (ejs = '', data = {}) => {
 </body>
 ```
 
-## 4. ejs语句
+## ejs语句
 
 这里扩展一下```ejs```，加上一个```arr.join```语句。
 
@@ -359,7 +357,7 @@ console.log(result);
 </body>
 ```
 
-## 5. 标签转义
+## 标签转义
 
 ```<%=```会对传入的```html```进行转义，这里编写一个```escapeHTML```转义函数。
 
