@@ -1,12 +1,118 @@
 在React中false, null, undefined, 以及true 是合法的子元素，它们并不会被渲染。
 
-## 1. React16 和 React 15的区别
+## React 18新特性
 
-React16使用了全新的Fiber算法来分批的构建虚拟DOM对象，替代过去的一次性完成，同时生命周期上新增了getDerivedStateFromProps，getDerivedStateFromError，componentDidCatch，getSnapShortBeforeUpdate。并且不建议使用componentWillMount，componentWillReceiveProps，componentWillUpdate生命周期。
+### 1. Concurrent Mode
 
-componentWillMount中的代码可以移动至constructor，componentWillReceiveProps在新的Fiber算法可能会执行多次，所以可以使用getDerivedStateFromProps这个更加接近函数式的静态方法替代，减少副作用。
+在以前，React 在状态变更后，会开始准备虚拟 DOM，然后渲染真实 DOM，整个流程是串行的。一旦开始触发更新，只能等流程完全结束，期间是无法中断的。在 CM 模式下，React 在执行过程中，每执行一个 Fiber，都会看看有没有更高优先级的更新，如果有，则当前低优先级的的更新会被暂停，待高优先级任务执行完之后，再继续执行或重新执行。
 
-## 2. React 17新特性
+紧急更新（Urgent updates）：比如打字、点击、拖动等，需要立即响应的行为，如果不立即响应会给人很卡，或者出问题了的感觉
+
+过渡更新（Transition updates）：将 UI 从一个视图过渡到另一个视图。不需要即时响应，有些延迟是可以接受的。
+
+默认情况下，所有的更新都是紧急更新，这是因为 React 并不能自动识别哪些更新是优先级更高的。
+
+```js
+// 紧急的
+setInputValue(e.target.value);
+startTransition(() => {
+  setSearchQuery(input); // 非紧急的
+});
+```
+
+通过 startTransition来标记一个非紧急更新，让该状态触发的变更变成低优先级的。React 会在高优先级更新渲染完成之后，才会启动低优先级更新渲染，并且低优先级渲染随时可被其它高优先级更新中断。React 18 提供了 useTransition来跟踪 transition 状态。
+
+```js
+// 实时监听 transition 状态
+const [isPending, startTransition] = useTransition();
+
+function changeTreeLean(event) {
+  const value = Number(event.target.value);
+  React.startTransition(() => {
+    setTreeLean(value);
+  });
+}
+
+return (
+  <Spin spinning={isPending}>
+    <Pythagoras lean={treeLean} />
+  </Spin>
+)
+```
+
+### 2. 自动批处理 Automatic Batching
+
+React 将多个状态更新，聚合到一次 render 中执行，以提升性能。在 React 18 之前，React 只会在事件回调中使用批处理，而在 Promise、setTimeout、原生事件等场景下，是不能使用批处理的。在 React 18 中，所有的状态更新，都会自动使用批处理，不关心场景。
+
+```js
+function handleClick() {
+  setCount(c => c + 1);
+  setFlag(f => !f);
+  // React 只会 re-render 一次，这就是批处理
+}
+
+setTimeout(() => {
+  setCount(c => c + 1);
+  setFlag(f => !f);
+  // React 只会 re-render 一次，这就是批处理
+}, 1000);
+```
+
+如果你在某种场景下不想使用批处理，你可以通过 flushSync来强制同步执行。
+
+```js
+function handleClick() {
+  flushSync(() => {
+    setCounter(c => c + 1);
+  });
+  // React 更新一次 DOM
+  flushSync(() => {
+    setFlag(f => !f);
+  });
+  // React 更新一次 DOM
+}
+```
+
+### 3. 流式 SSR
+
+在 React 18 中，基于全新的 Suspense，支持了流式 SSR，也就是允许服务端一点一点的返回页面。通过 Suspense包裹，可以告诉 React，不需要等某个组件，可以先返回其它内容，等这个组件准备好之后，单独返回。
+
+```jsx
+<Layout>
+  <NavBar />
+  <Suspense fallback={<Spinner />}>
+    <Comments />
+  </Suspense>
+</Layout>
+```
+
+### 4. Server Component
+
+Server Component 的本质就是由服务端生成 React 组件，返回一个 DSL 给客户端，客户端解析 DSL 并渲染该组件。运行在服务端的组件只会返回最终的 DSL 信息，而不包含其他任何依赖。假设有一个 markdown 渲染组件，以前需要将依赖 marked和 sanitize-html打包到 JS 中。如果该组件在服务端运行，则最终返回给客户端的是转换完成的文本。由于 Server Component 在服务端执行，拥有了完整的 NodeJS 的能力，可以访问任何服务端 API。
+
+当然Server Component 肯定也是有一些局限性，不能有状态，也就是不能使用 state、effect 等，那么更适合用在纯展示的组件，对性能要求较高的一些前台业务，不能访问浏览器的 API，props 必须能被序列化。
+
+### 5. OffScreen
+
+OffScreen 支持只保存组件的状态，而删除组件的 UI 部分。可以很方便的实现预渲染，或者 Keep Alive。比如在从 tabA 切换到 tabB，再返回 tabA 时，React 会使用之前保存的状态恢复组件。
+
+### 6. useDeferredValue
+
+useDeferredValue 可以让一个 state 延迟生效，只有当前没有紧急更新时，该值才会变为最新值。useDeferredValue 和 startTransition 一样，都是标记了一次非紧急更新。
+
+### 7. useId
+
+支持同一个组件在客户端和服务端生成相同的唯一的 ID，避免 hydration 的不兼容。原理是每个 id 代表该组件在组件树中的层级结构。
+
+### 8. useSyncExternalStore
+
+useSyncExternalStore 能够让 React 组件在 Concurrent Mode 下安全地有效地读取外接数据源。在 Concurrent Mode 下，React 一次渲染会分片执行（以 fiber 为单位），中间可能穿插优先级更高的更新。假如在高优先级的更新中改变了公共数据（比如 redux 中的数据），那之前低优先的渲染必须要重新开始执行，否则就会出现前后状态不一致的情况。useSyncExternalStore 一般是三方状态管理库使用，一般我们不需要关注。
+
+### 9. useInsertionEffect
+
+这个 Hooks 只建议 css-in-js库来使用。这个 Hooks 执行时机在 DOM 生成之后，useLayoutEffect 生效之前，一般用于提前注入 ```<style>``` 脚本。
+
+## React 17新特性
 
 React17并没有增加任何的新的API，他是一个过渡版本，保留了过去所有的API使用性。同时为未来做好了铺垫。其中的几个重要的修改点有，事件委托的变更，移除事件池，修改Effect清理时机，render返回undefined报错，删除部分暴露出来的私有 API等。
 
@@ -14,7 +120,12 @@ React17并没有增加任何的新的API，他是一个过渡版本，保留了�
 
 总之，React17 是一个铺垫，这个版本的核心目标是让 React 能够渐进地升级，因此最大的变化是允许多版本混用，为将来新特性的平稳落地做好准备。
 
-## 3. Hooks
+## React16 和 React 15的区别
+
+React16使用了全新的Fiber算法来分批的构建虚拟DOM对象，替代过去的一次性完成，同时生命周期上新增了getDerivedStateFromProps，getDerivedStateFromError，componentDidCatch，getSnapShortBeforeUpdate。并且不建议使用componentWillMount，componentWillReceiveProps，componentWillUpdate生命周期。
+
+componentWillMount中的代码可以移动至constructor，componentWillReceiveProps在新的Fiber算法可能会执行多次，所以可以使用getDerivedStateFromProps这个更加接近函数式的静态方法替代，减少副作用。
+## Hooks
 
 Hook 是一个特殊的函数，它可以让你“钩入” React 的特性，如果你在编写函数组件并意识到需要向其添加一些 state，以前的做法是必须将其它转化为 class。现在你可以在现有的函数组件中使用 Hook。
 
@@ -110,7 +221,7 @@ FancyInput = forwardRef(FancyInput);
 
 useDebugValue 可用于在 React 开发者工具中显示自定义 hook 的标签。
 
-## 4. 静态方法
+## 静态方法
 
 ### 1. React.Component
 
@@ -210,13 +321,13 @@ function MyComponent() {
 
 React.lazy() 和 <React.Suspense> 尚未在 ReactDOMServer 中支持。这是已知问题，将会在未来解决。
 
-## 5. key
+## key
 
 key 帮助 React 识别哪些元素改变了。元素的 key 最好是这个元素在列表中拥有的一个独一无二的字符串。当元素没有确定 id 的时候，万不得已可以使用元素索引 index 作为 key。key 只是在兄弟节点之间必须唯一。
 
 默认情况下，当递归 DOM 节点的子元素时，React 会同时遍历两个子元素的列表；当产生差异时，生成一个 mutation。当子元素拥有 key 时，React 使用 key 来匹配原有树上的子元素以及最新树上的子元素。相同的key会发生移动，而不是重新创建。当基于下标的组件进行重新排序时，组件 state 可能会遇到一些问题。由于组件实例是基于它们的 key 来决定是否更新以及复用，如果 key 是一个下标，那么修改顺序时会修改当前的 key，导致非受控组件的 state（比如输入框）可能相互篡改，会出现无法预期的变动。
 
-## 6. Context
+## Context
 
 Context 设计目的是为了共享那些对于一个组件树而言是“全局”的数据。Provider 接收一个 value 属性，传递给消费组件。一个 Provider 可以和多个消费组件有对应关系。多个 Provider 也可以嵌套使用，里层的会覆盖外层的数据。
 
@@ -250,7 +361,7 @@ class ThemedButton extends React.Component {
 }
 ```
 
-## 7. 生命周期
+## 生命周期
 
 ```js
 // 加载
@@ -374,7 +485,7 @@ defaultProps 可以为 Class 组件添加默认 props。
 
 displayName 字符串多用于调试消息。通常，你不需要设置它，因为它可以根据函数组件或 class 组件的名称推断出来。
 
-## 8. ReactDOM
+## ReactDOM
 
 ### 1. render
 
@@ -414,7 +525,7 @@ displayName 字符串多用于调试消息。通常，你不需要设置它，�
 
 此方法与 renderToNodeStream 相似，但此方法不会在 React 内部创建的额外 DOM 属性，例如 data-reactroot。
 
-## 10. diff算法
+## diff算法
 
 在某一时间节点调用 React 的 render() 方法，会创建一棵由 React 元素组成的树。在下一次 state 或 props 更新时，相同的 render() 方法会返回一棵不同的树。React 需要基于这两棵树之间的差别来判断如何有效率的更新 UI 以保证当前 UI 与最新的树保持同步。
 
@@ -440,13 +551,13 @@ displayName 字符串多用于调试消息。通常，你不需要设置它，�
 
 Key 应该具有稳定，可预测，以及列表内唯一的特质。不稳定的 key（比如通过 Math.random() 生成的）会导致许多组件实例和 DOM 节点被不必要地重新创建，这可能导致性能下降和子组件中的状态丢失。
 
-## 11. 严格模式
+## 严格模式
 
 StrictMode 是一个用来突出显示应用程序中潜在问题的工具。与 Fragment 一样，StrictMode 不会渲染任何可见的 UI。它为其后代元素触发额外的检查和警告。
 
 StrictMode 目前有助于：识别不安全的生命周期，关于使用过时字符串 ref API 的警告，关于使用废弃的 findDOMNode 方法的警告，检测意外的副作用，检测过时的 context API。
 
-## 12. 属性
+## 属性
 
 ### 1. checked
 
