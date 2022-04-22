@@ -3674,7 +3674,7 @@ npm i @babel/runtime --save;
 
 ## 27. 手写打包原理
 
-出家门和口岸```buidile.js```文件，引入```fs```模块用于处理文件，创建```modules```函数用于分析模块内容。
+创建```buidile.js```文件，引入```fs```模块用于处理文件，创建```modules```函数用于分析模块内容。
 
 ```js
 const fs = require('fs');
