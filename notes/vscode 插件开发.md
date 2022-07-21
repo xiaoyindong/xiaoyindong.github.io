@@ -539,4 +539,536 @@ exports.deactivate = deactivate;
 cons vscode = require('vscode');
 function activate(context) { 
     vscode.commands.regiserCommand('extension.sayHello', () => {
-        let deco
+        let decorationType = vscode.window.createTextEditorDecorationType({ backgroundColor: '#fff' });
+        let editor = vscode.window.activeTextEditor; editor.setDecorations(decorationType, [new vscode.Range(0, 0, 0, 1)]);
+    }); 
+}
+
+exports.activate = activate;
+
+function deactivate() {
+
+}
+
+exports.deactivate = deactivate;
+```
+
+注册一个名为```extension.sayHello```的命令，创建```DecorationType```。
+
+```js
+let decorationType = vscode.window.createTextEditorDecorationType({ backgroundColor: '#fff'})
+```
+
+使用```vscode.window.createTextEditorDecorationType```传入参数对象，对象里添加了属性```backgroundColor```用于定义背景色的。
+
+获取当前的编辑器对象```editor```。使用```editor```上的```setDecorations```方法，并且传入两个参数，第一个是我创建的```DecorationType```，第二个是代码范围```Range```。通过这个```API```，在代码片段```Range```上使用```decorationType```所代表的装饰器，也就是将背景色调整成```#fff```。
+
+运行插件，无论是```Pigment```、```Rainbow Brackets```，还是```GitLens```，它们修改编辑器内代码颜色和背景色的逻辑跟上面的这一小段代码基本一致。只不过```VS Code```的```Decoration API```，有非常多不同的属性可以设置，这也让```Decoration```效果千差万别。
+
+如果在```createTextEditorDecorationType```运行```F12```，就能够跳转到```createTextEditorDecorationType```函数的定义处，函数的参数类型是```DecorationRenderOptions```。```createTextEditorDecorationType```的结构如下。
+
+```js
+export interface DecorationRenderOptions extends ThemableDecorationRenderOptions { 
+    isWholeLine?: boolean;
+    rangeBehavior?: DecorationRangeBehavior; 
+    overviewRulerLane?: OverviewRulerLane; 
+    light?: ThemableDecorationRenderOptions; 
+    dark?: ThemableDecorationRenderOptions;
+}
+```
+
+```createTextEditorDecorationType```继承自```ThemableDecorationRenderOptions```，不过它多加了几个属性。比如是否将```decoration```运用在整行代码上，是否要将颜色渲染在滚动条上等。不过比较重要的两个属性其实是```light```和```dark```。
+
+```light```和```dark```的类型，都是```ThemableDecorationRenderOptions```，只要设置了这两个值，```VS Code```就会根据当前的主题是深色还是浅色，决定是加载```light```还是```dark```的值，如果这两个值没有设置的话，那么就会查看```DecorationRenderOptions```上的其他属性。```ThemableDecorationRenderOptions```有如下属性。
+
+```js
+export interface ThemableDecorationRenderOptions { 
+    backgroundColor?: sring | ThemeColor; outline?: sring;
+    outlineColor?: sring | ThemeColor; outlineStyle?: sring;
+    outlineWidth?: sring;
+    border?: sring;
+    borderColor?: sring | ThemeColor; borderRadius?: sring; borderSpacing?: sring; borderStyle?: sring; borderWidth?: sring;
+    fontStyle?: sring;
+    fontWeight?: sring;
+    textDecoration?: sring;
+    cursor?: sring;
+    color?: sring | ThemeColor;
+    opacity?: sring;
+    letterSpacing?: sring;
+    gutterIconPath?: sring | Uri;
+    gutterIconSize?: sring;
+    overviewRulerColor?: sring | ThemeColor;
+    before?: ThemableDecorationAttachmentRenderOptions; after?: ThemableDecorationAttachmentRenderOptions;
+}
+```
+
+可以给这些属性归归类。
+
+### 1. Color 
+
+代码颜色和背景相关的属性。
+
+```js
+    backgroundColor?: sring | ThemeColor; 
+    color?: sring | ThemeColor; 
+    overviewRulerColor?: sring | ThemeColor;
+```
+
+除了使用类似于```#fff```这样的字符串以外，还可以使用```ThemeColor```，也就是颜色主题(```themes```) 里的颜色定义，比如。
+
+```js
+new vscode.ThemeColor('editorWarning.foreground')
+```
+
+这样一来，当切换主题的时候，颜色会随之改变。
+
+### 2. Border
+
+第二类是```Border```边框。
+
+```js
+border?: sring;
+borderColor?: sring | ThemeColor; 
+borderRadius?: sring; 
+borderSpacing?: sring; 
+borderStyle?: sring; 
+borderWidth?: sring;
+```
+
+比如对上面的样例代码略作修改。
+
+```js
+vscode.commands.regiserCommand('extension.sayHello', () => {
+    let decorationType = vscode.window.createTextEditorDecorationType({
+        border: '1px solid red;' 
+    });
+    let editor = vscode.window.activeTextEditor;
+    editor.setDecorations(decorationType, [new vscode.Range(0, 0, 0, 1)]); 
+});
+```
+
+然后运行代码，就能够给代码块添加边框了。
+
+### 3. Outline
+
+在```CSS```中```Outline```(轮廓)是用于在```Border```边框的周围画一条线，以突出元素。我们同样可以使用下面这些配置，来分别控制```Outline```的各个属性。
+
+```js
+    outline?: sring;
+    outlineColor?: sring | ThemeColor; 
+    outlineStyle?: sring; 
+    outlineWidth?: sring;
+```
+
+比如，我们将样例代码修改成如下:
+
+```js
+vscode.commands.regiserCommand('extension.sayHello', () => {
+    let decorationType = vscode.window.createTextEditorDecorationType({
+        outline: '#00FF00 dotted' 
+    });
+    let editor = vscode.window.activeTextEditor; editor.setDecorations(decorationType, [new vscode.Range(1, 1, 1, 4)]);
+})
+```
+
+为了更好地看到效果，这里把```range```修改成了```new vscode.Range(1, 1, 1, 4)```。
+
+### 4. Font
+
+可以通过```fontStyle```和```fontWeight```来控制字体，也可以通过```opacity```来控制透明度，或者使用```letterSpacing```控制文字之间的间距。
+
+```js
+    fontStyle?: sring; 
+    fontWeight?: sring; 
+    opacity?: sring; 
+    letterSpacing?: sring;
+```
+
+比如代码修改为。
+
+```js
+vscode.commands.regiserCommand('extension.sayHello', () => {
+    let decorationType = vscode.window.createTextEditorDecorationType({ 
+        fontStyle: 'italic',
+        letterSpacing: '3px'
+    });
+    let editor = vscode.window.activeTextEditor; editor.setDecorations(decorationType, [new vscode.Range(1, 1, 1, 4)]);
+});
+```
+
+### 5. 其他
+
+除此之外，还可以通过```gutterIconPath```和```gutterIconSize```在行号旁边添加图标。
+
+```js
+    gutterIconPath?: sring | Uri; 
+    gutterIconSize?: sring;
+```
+
+比如说```VS Code```中的断点，就可以通过这个属性在插件中实现。另外，也可以通过```before```和```after```在某个代码的前面或者后面创建```decorations```。
+
+```js
+before?: ThemableDecorationAttachmentRenderOptions; 
+after?: ThemableDecorationAttachmentRenderOptions;
+```
+
+```CSS```文件里颜色前的```Color Decorator```小方格，就是使用```before```属性来实现。
+
+```DecorationRenderOptions```里的大部分属性，其实就是```CSS```里的各种属性，如果知道如何使用```CSS```来对元素布局的话，那么使用这些```API```就难不倒你。不过最难的还是想象力，如何活用这套```API```，将重要的信息呈现给用户，而又不会打扰到用户的正常体验，这就体现功力了。
+
+比如之前介绍过```Import Cost```插件，这个插件就巧妙地将每个```javascript```模块的大小，渲染在了这一行代码的最后，十分显眼，但又不会影响到查看代码。
+
+```GitLens```插件也有类似的设计，它可以把当前这行是谁写的从```Git```中读取出来，然后渲染在本行代码的最后，同时这些信息的颜色比较浅，从而不会喧宾夺主，当需要的时候也可以轻松迅速地查看代码的修改信息。文章最开始介绍的```Rainbow Brackets```等也都是对```Decoration API```的活用。
+
+## 9. 工作台 API
+
+第一类是通过插件```API```在```VS Code```中调出对话框向用户询问问题，或者弹出信息提示以警示用户。二者的本质是一致的，都是跟用户进行信息的交互，以完成进一步的操作。
+
+首先来看信息提示，这个```API```在之前的例子里已经使用过了。
+
+比如下面的这段示例代码，注册了```extension.sayHello```命令，通过```vscode.window.showInformationMessage```输出提示```Hello World```。
+
+```js
+vscode.commands.regiserCommand('extension.sayHello', () => { 
+    vscode.window.showInformationMessage('Hello World');
+});
+```
+
+至于对话框可以使用的```API```有两种```showWarningMessage```和```showErrorMessage```。使用方法都是一样的，不过呈现效果会不同，用以体现```Information、Warning```和```Error```不同的重要程度。
+
+除了给用户展示信息以外，这三个```API```还允许和用户进行简单的交互。先来看```showInformationMessage```的定义。
+
+```js
+/**
+* Show an information message to users. Optionally provide an array of items which will be presented as
+* clickable buttons. *
+* @param message The message to show.
+* @param items A set of items that will be rendered as actions in the message.
+* @return A thenable that resolves to the selected item or `undefned` when being dismissed. 
+*/
+
+export function showInformationMessage(message: sring, ...items: sring[]): Thenable<sring | undefned>;
+```
+
+除了传入消息```message```，还可以传入一个数组，这个数组里的字符串，都会被渲染成按钮，当用户按下这些按钮，就能够收到反馈了。
+
+```js
+vscode.commands.regiserCommand('extension.sayHello', () => { 
+    vscode.window.showInformationMessage('Hello World', 'Yes', 'No').then(value => {
+        vscode.window.showInformationMessage('User press ' + value); 
+    })
+});
+```
+
+给用户提供了```Yes```和```No```两个选项，当用户选择其中之一后，弹出一个新的信息框，显示用户点击了哪个。
+
+```QuickPick```通过```vscode.window.showQuickPick```函数，给用户提供一系列选项，根据用户选择的选项进行下一步操作。这里给用户提供了三个选项```first```、```second```、```third```，然后将用户的选择以信息的方式弹出。
+
+```js
+vscode.window.showQuickPick(['first', 'second', 'third']).then(value => { 
+    vscode.window.showInformationMessage('User choose ' + value);
+})
+```
+
+```showQuickPick```的第一个参数除了可以是一个字符串数组以外，还可以提供其他不同的类型比如```Promise```，这个参数可以为最终解析值为字符串数组的```Promise```。有了这个类型，就能够异步地获取选项列表，等这个列表解析出来了再提供给用户，而用户则会在界面上看到滚动条。
+
+另外，数组也可以是```QuickPickItem```对象数组。
+
+```js
+export interface QuickPickItem {
+/**
+* A human readable sring which is rendered prominent.
+*/
+    label: sring; 
+    description?: sring; 
+    detail?: sring; 
+    picked?: boolean;
+    alwaysShow?: boolean;
+}
+```
+
+上面的示例里面使用的数组也可以用```QuickPickItem```来替代，只需要使用```QuickPickItem```的```label```属性，然后```label```里的值就会被渲染在列表中。
+
+除了```label```还可以通过```description```或者```detail```来提供更多的信息。比如说使用下面的```QuickPickItem```数组。
+
+```js
+vscode.commands.regiserCommand('extension.sayHello', () => { 
+    vscode.window.showQuickPick([{
+        label: 'frs',
+        description: 'frs item',
+        detail: 'frs item details'
+    },{
+        label: 'second', 
+        description: 'second item', 
+        detail: 'second item details'
+    }]).then(value => {
+        vscode.window.showInformationMessage('User choose ' + value.label);
+    }) 
+});
+```
+
+至于```picked```属性就非常好理解了。默认情况下列表里的第一个选项会被选中。如果希望默认选中其他项的话，将它的```picked```属性改为```true```就好了。```alwaysShow```这个属性则是使用于列表很长的情况，如果列表非常长，```VS Code```不得不渲染出滚动条时，通过将某些项的```alwaysShow```属性改为```true```，这个选项就会一直出现在列表中，而不会受滚动条的影响。
+
+整体来讲实现插件的过程中，很多命令或者操作的流程、信息，并不是完全确定的，往往需要用户来提供更多的信息，并且由用户来做出最终的决定。这个时候通过信息提示和```QuickPick```将选择权交还给了用户。
+
+但是一定要注意的是信息提示和```QuickPick```都是会打扰用户的正常工作的。所以在使用这类```API```的时候一定要慎重，不然用户可能就会卸载我们的插件了。
+
+## 10. 面板 Panel
+
+第二类就是面板里的信息了。默认情况下，面板中有以下```4```个组件：问题面板，调试面板，输出面板，终端面板。这里面除了调试面板是由调试插件控制的以外，其他的三个，都是可以通过普通的插件```API```来完成的。这里面属问题面板和输出面板使用最为频繁。
+
+### 1. 问题面板
+
+在书写代码时```VS Code```的各类插件会把代码中出现的错误信息提供给问题面板。然后用户就可以通过问题面板，快速地查询问题并且进行代码的跳转。问题面板相关的```API```存在于```vscode.languages```的```namespace```下。要给问题面板提供相关的信息，使用的```API```是```createDiagnosticCollection```。
+
+```js
+export namespace languages { 
+/**
+* Create a diagnosics collection.
+*
+* @param name The name of the collection. * @return A new diagnosic collection.
+*/
+export function createDiagnosicCollection(name?: sring): DiagnosicCollection; }
+```
+
+通过```vscode.languages.createDiagnosticCollection```创建出来的对象，将是跟```VS Code```问题面板通讯的中介。下面使用如下的代码样例进行说明。
+
+```js
+vscode.commands.regiserCommand('extension.sayHello', () => {
+    let collection = vscode.languages.createDiagnosicCollection('myextension');
+    let uri = vscode.window.activeTextEditor.document.uri;
+    collection.set(uri, [
+        {
+            range: new vscode.Range(0, 0, 0, 1), message: 'We found an error'
+        } 
+    ]);
+});
+```
+
+在```collection```对象创建出来后，就要往这个```collection```里塞数据，这里使用的```API```是```set(uri: Uri, diagnosics: Diagnosic[] | undefned): void;```。
+
+```set```函数提供两个参数第一个是文档的地址```Uri```，样例代码里使用了```vscode.window.activeTextEditor.document.uri```，也就是当前编辑器里的文档的地址```Uri```。第二个是在这个文档里发现的所有问题，每个问题的类型必须是```Diagnostic```。
+
+```js
+export class Diagnosic { 
+/**
+* The range to which this diagnosic applies. 
+*/
+    range: Range; /**
+    * The human-readable message.
+    */
+    message: sring; /**
+    * The severity, default is error.
+    */
+    severity: DiagnosicSeverity;
+
+    source?: sring;
+    code?: sring | number;
+    relatedInformation?: DiagnosicRelatedInformation[];
+    tags?: DiagnosicTag[];
+    consructor(range: Range, message: sring, severity?: DiagnosicSeverity);
+}
+```
+
+```Diagnostic```对象必须要提供的两个属性是```range```和```message```，也就是问题所在的位置和问题相关的信息。还可以给```Diagnostic```对象提供诸如```severity```问题的程度、```source```问题的来源等。
+
+代码运行起来后在编辑器里执行```Hello World```命令，可以看到第一行第一列代码下出现了波浪线，同时问题面板里也多出了一个条目，点击它就能够跳转到编辑器中。
+
+### 2. 输出面板
+
+输出面板提供内容的```API```要更简单一些。首先要创建一个```OutputChannel```。只要提供一个名字即可。接着就可以往这个对象中添加输出日志了。有了这两行代码，就可以运行了。
+
+```js
+let channel = vscode.window.createOutputChannel('MyExtension');
+
+channel.appendLine('Hello World');
+```
+
+通过上面的代码可以发现，输出面板下拉框中现在出现了一个新的选项，叫做```MyExtension```也就是创建的```OutputChannel```。接着使用```channel.appendLine```输出的信息，就会被放在输出面板中。这套```API```非常像```console.log()```，唯一不同的是这套```API```将内容输出到了输出面板中。
+
+这部分总体来说就是问题面板的使用，跟语言服务结合到一起会很好，比如```Linting```信息、编译错误信息，甚至错别字检查信息，都可以塞到问题面板中。不过要注意，问题面板里的内容，意味着需要用户去修改代码。所以一些无关紧要的信息就不要放到这里面了。
+
+而输出面板，完全可以把它当```log```日志来使用。大部分时间用户不需要去关心它，不过当用户遇到问题了，如果能够通过输出日志里的信息获得帮助，那么输出面板的目的就达到了。
+
+### 3. 视图 TreeView
+
+这一套```API```的最初需求是来自于```Visual Studio```用户，```Visual Studio```中，可以在视图中看到项目、测试、云管理等，但是```VS Code```当时并没有```API```可以实现这种定制。于是```TreeView```应运而生，通过实现这套```API```，任何插件都可以实现类似于资源管理器的树形结构。
+
+```TreeView```虽然是用于创建视图中树形结构的，但是它跟```VS Code```的其他 API 非常类似，都是给```VS Code```提供数据，然后```VS Code```来进行渲染。创建```TreeView```的```API```也非常简单。
+
+```js
+export namespace window {
+    export function regiserTreeDataProvider<T>(viewId: sring, treeDataProvider: TreeDataProvider<T>): Disposable;
+}
+```
+
+```registerTreeDataProvider```一共有两个参数第一个是```TreeView```的名字，第二个是```TreeView```的数据来源```Data Provider```。
+
+```js
+export interface TreeDataProvider<T> { 
+    onDidChangeTreeData?: Event<T | undefned | null>; 
+    getTreeItem(element: T): TreeItem | Thenable<TreeItem>; 
+    getChildren(element?: T): ProviderResult<T[]>; 
+    getParent?(element: T): ProviderResult<T>;
+}
+```
+
+```Data Provider```上只有两个属性是必须的。第一个是```getTreeItem```，通过这个函数，```VS Code```就知道该怎么渲染某个树节点了。第二个是```getChildren```，返回一个树节点的所有子节点的数据。```TreeItem```是每个树节点的数据结构。
+
+```js
+export class TreeItem {
+    label?: sring;
+    id?: sring;
+    iconPath?: sring | Uri | { light: sring | Uri; dark: sring | Uri } | ThemeIcon; 
+    resourceUri?: Uri;
+    tooltip?: sring | undefned;
+    /**
+    * The command that should be executed when the tree item is selected.
+    */
+    command?: Command;
+    /**
+    * TreeItemCollapsibleState of the tree item. 
+    */
+    collapsibleState?: TreeItemCollapsibleState;
+    contextValue?: sring;
+    consructor(label: sring, collapsibleState?: TreeItemCollapsibleState); 
+    consructor(resourceUri: Uri, collapsibleState?: TreeItemCollapsibleState);
+}
+```
+
+```TreeItem```有两种创建方式第一种是提供```label```，也就是一个字符串，```VS Code```会把这个字符串渲染在树形结构中，第二种是提供```resourceUri```也就是一个资源地址，```VS Code```则会像资源管理器里渲染文件和文件夹一样渲染这个节点。
+
+```iconPath```属性是用于控制树节点前的图标的。如果自己通过```TreeView```来实现一个资源管理器，就可以使用```iconPath```来为不同的文件类型指定不同的图标。```tooltip```属性是当把鼠标移动到某个节点上等待片刻，```VS Code```就会显示出这个节点对应的```tooltip```文字。```collapsibleState```用于控制这个树节点是应该展开还是折叠。当然，如果这个节点没有子节点的话，这个属性就用不着了。```command```属性如果存在的话，当点击这个树节点时，这个属性所指定的命令就会被执行了。
+
+了解了以上几个属性就能够实现一个简易的```TreeView```了。
+
+```js
+       
+vscode.window.regiserTreeDataProvider('myextension', { 
+    getChildren: (element) => {
+        if (element) { 
+            return null;
+        }
+        return ['first', 'second', 'third']; 
+    },
+    getTreeItem: (element) => { 
+        return {
+            label: element,
+            tooltip: 'my ' + element + ' item' 
+        }
+    } 
+})
+```
+
+上面的这段代码注册了一个名为```myextension```的```TreeView```，这个```TreeView```只有一层节点，分别是```first```、```second```、```third```。将这段代码放入```extension.js```中时，运行插件会发现```VS Code```的视图里找不到这个名为```myextension```的```TreeView```。
+
+```js
+cons vscode = require('vscode');
+
+function activate(context) { 
+    vscode.window.regiserTreeDataProvider('myextension', {
+        getChildren: (element) => { 
+            if (element) {
+                return null; 
+            }
+            return ['first', 'second', 'third']; 
+        },
+        getTreeItem: (element) => { 
+            return {
+                label: element,
+                tooltip: 'my ' + element + ' item' 
+            }
+        } 
+    })
+}
+
+exports.activate = activate;
+
+function deactivate() {
+}
+exports.deactivate = deactivate;
+```
+   
+这是因为要想将这个 TreeView 成功地注册到```VS Code```中，需要在```package.json```的```contributes```部分添加```TreeView```的申明。修改后的```package.json```的```contributes```部分如下。
+
+```json
+{
+    "contributes": {
+        "views": {
+            "explorer": [
+                {
+                    "id": "myextension",
+                    "name": "My Extension"
+                }
+            ]
+        }
+    }
+}
+```
+
+这段```contributes```是说，把```myextension```这个```TreeView```注册到资源管理器中。除了将```TreeView```注册到资源管理器```Explorer```下以外，也可以将它注册到版本管理视图中，对应的```contributes```如下。
+
+```json
+"contributes": {
+    "views": {
+        "scm": [
+            {
+                "id": "myextension",
+                "name": "My Extension"
+            }
+        ]
+    }
+}
+```
+
+代码运行起来后，就能够在版本管理视图中看到这个```TreeView```了。
+
+简言之，```VS Code```的```TreeView```使用了```Data Provider```的模式，插件提供数据，而```VS Code```负责渲染。至于数据长什么样、树形结构里的层级关系如何，这个就属于```Business Logic```了，需要开发者自己发挥想象力。比如说```GitHub Pull Request```插件，用树形结构来展示所有的```Pull Requests```和每个```PR```里的代码改动，```NPM Explorer```则将所有的```NPM```脚本展示在树形结构中。
+
+除此之外```VS Code```还有很多别的有趣的工作台相关的```API```，比如可以使用```WebView```来生成任意的编辑器内容，可以使用```FileSystemProvider```或者```TextDocumentContentProvider```来为```VS Code```提供类似于本地文件的文本内容。虽然它们很小众也更高级，但是使用的方法，跟上面提到的几种并没有什么区别，建议你通过```VS Code```的```typings```文件找寻你想要使用的```API```多多尝试。
+
+## 11. 维护和发布
+
+```VS Code```的插件```API```的发布流程首先是发出提议```Proposal```，看看社区的反馈如何。这一类```API```会出现在```vscode.proposed.d.ts```文件中，而稳定版本的```API```则是在```vscode.d.ts```里。一个```API```进入```proposed```状态并不需要什么流程，但是要进入```stable```的话，就要经过整个团队的```review```了。基本上一个```API```要发布到```stable```中，需满足以下几个条件。
+
+首先，插件```API```不会将```UI```直接暴露给插件。```VS Code```的界面 (也就是```DOM```)的渲染完全由```VS Code```控制，插件```API```可以做的，就是将```UI```上的渲染逻辑翻译成```Data Provider```的形式，插件提供内容，```VS Code```负责渲染。
+
+其次，如果一个```API```的运行时间可能比较长，那么这个```API```应该支持```Promise```，并且可以取消(也就是```vscode.d.ts```里常看到的```Cancellation Token```)。
+
+最后，插件```API```能够正确地处理对象的生命周期。```VS Code```使用了```Dispose```模式，大部分```VS Code```插件```API```生成的对象，都会拥有一个```dispose```函数属性，然后运行这个函数就可以将这个对象销毁。
+
+基于上面的这些```API```设计原则，也能够得出一个好的插件实现应该有如下特性。
+
+对于长时间运行的任务，如果用户选择取消，那么插件应该能够终止任务。 插件能够及时地删除不再使用的对象，以及正确的时候```dispose VS Code```生成的对象，减少内存的使用。插件在给```VS Code```插件```API```提供数据的同时，能够做到增量更新，尽可能地减少```VS Code```重新渲染组件。只有做到上面这些，才能尽可能地保证插件的性能。插件提供的功能是一方面，但是如果性能出众的话，就真的是一个好插件了。
+
+### 1. Node.js 模块使用
+
+```VS Code```插件其实就是一个```Node.js```应用。那么如何管理```Node.js```的```dependencies```也是插件应该关心的。在使用第三方的```Node.js```模块时，要注意以下几点。
+
+第一，很多简单的功能，其实可以自己实现，过多地使用第三方模块，会导致代码量不必要地增大。代码量增大，就相应地减慢了插件的下载和更新。同时插件被激活时，需要加载各个```Node.js```模块，模块越多，速度也就越慢。所以使用模块要克制。第二，如果可以的话，借助 webpack 对插件进行打包，并且开启```treeshaking```，把没有使用的代码删除掉。第三，对于性能要求比较高的应用，可以考虑使用```Node.js```的```Native Module```或者```Web Assembly```。最新版本的```VS Code```里已经支持了```Node.js```新的```Native Module API (N-API)```和```Web Assembly```了。不过这两者之间也各有优劣。
+
+在```NAPI```之前，大家都在使用```NAN```来管理```Node.js Native Module```，但是一旦```VS Code```升级了```Electron```，导致```Node.js```版本发生变化，所有的```Native Module```就不能工作了。```NAPI```的出现，解决了这个问题，再也不用担心```Electron```升级的问题了。但是```NAPI```也并没有解决发布的问题，依然得为每个不同的平台(```Windows，macOS，Linux```)分别编译```Native Module```，比较麻烦。
+
+相比于```Native Module```，使用```Web Assembly```就要好很多，因为```Web Assembly```天然就是跨平台的。但是它也有缺点，就是无法访问系统```API```，如果代码必须要访问到一些原生的```API```，可能还是得用```Native Module```。
+
+以上的重点依然是性能。对于大部分插件而言```business logic```都不是特别复杂，而性能往往就是区分度，如果能够借助```Native Module、Web Assembly```或者```Webpack```等打包工具，给插件代码提速，就非常给力了。
+
+### 2. 发布
+
+插件的最终发布跟插件```API```相比简单很多。只需创建一个```Visual Studio Online```账户，然后使用```vsce```这个```npm```包就能发布了。现在```Marketplace```更是允许直接在后台发布，而无需使用命令行。关于更多的细节，还请阅读官方文档。
+
+在插件的```package.json```文件中，有这样一个配置。
+
+```json
+"engines": {
+    "vscode": "^1.29.0"
+}
+```
+
+这段配置的意思是这个插件至少要求用户安装```1.29```版本的```VS Code```。```^1.29.0```的书写方式跟```npm```包的版本书写方式一模一样。
+
+那什么时候需要更新```engine```值呢？建议是当且仅当使用了某个新的```API```，而这个 新```API```要求了用户必须使用某个版本的```VS Code```时就值得去更新这个```engine```值了。更新完之后，只有新版本的```VS Code```用户，才会收到插件的更新，也就是说如果用户还在使用老版本的话，就不会收到更新。
+
+不过也不必担心更新了```engine```，导致用户量的减少，因为```VS Code```的大部分用户，都会在新版本发布之后的一到两个月更新到最新的版本，也就是说，很快用户数量就会恢复正常。而且在用户还没有完全升级的情况下，如果有什么```bug```，还可以及时修复，而不会波及太多的用户。
+
+好了，以上就是插件开发相关的全部内容了。正如一直强调的```VS Code```的插件开发，跟开发一个```Node.js```应用没有区别，使用的```API```都写在```vscode.d.ts```这个```typings```文件里。如果想看看这些插件```API```的样例代码，也可以自行下载试试看。
