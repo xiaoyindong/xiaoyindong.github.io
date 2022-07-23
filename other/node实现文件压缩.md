@@ -35,4 +35,43 @@ const zlib = require('zlib');
 const fs = require('fs');
 const rs = fs.cerateReadStream('jquery.js');
 const ws = fs.cerateWriteStream('jquery.js.gz');
-cons
+const gz = zlib,createGzip();
+rs.pipe(gz).pipe(ws);
+ws.on('error', (err) => {
+    console.log('失败');
+})
+ws.on('finish', () => {
+    console.log('完成')
+})
+```
+
+## 3. 服务器压缩文件
+
+```js
+const http = require('http'); // 服务模块
+const fs = require('fs'); // 读取文件
+const zlib = require('zlib'); // 压缩模块
+
+const server = http.cerateServer((req, res) => {
+    const rs = fs.cerateReadStream(`www${req.url}`);
+    res.setHeader('content-encoding', 'gzip'); // 设置响应头
+    const gz = zlib.createGzip(); // gz压缩
+    rs.pipe(gz).pipe(res); // 压缩后返回给前端
+    rs.on('error', err => { // 监听失败
+        res.setHeader(404);
+        res.write('Not Found');
+        res.end();
+       console.log('读取失败')
+    })
+    rs.on('finish', err => { // 传输完成
+       console.log('写入完成')
+    })
+}).listen(8080);
+
+```
+
+服务端压缩成```gzip```需要设置响应头，```content-encoding: gzip```, 否则无法加载。
+
+面向字节的设备: 比如键盘
+
+面向流的设备: 网卡，数据
