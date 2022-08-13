@@ -337,4 +337,331 @@ module.exports = {
 
  ## HMR
 
-```HRM（Hot Module Replacement）```翻译过来叫做模块热替换或者叫模块热更新。可以在应用程序运行的过程中实时的替换掉
+```HRM（Hot Module Replacement）```翻译过来叫做模块热替换或者叫模块热更新。可以在应用程序运行的过程中实时的替换掉应用中的某个模块。而应用的运行状态不会因此改变。```HMR```是```webpack```中最强大的特性之一，同时也是最受欢迎的特性。
+
+```HMR```已经集成在了```webpack-dev-server```工具中，使用这个特性需要运行```webpack-dev-server```命令时通过```--hot```参数开启，也可以在配置文件中添加对应的配置来开启。
+## DefinePlugin
+
+```webpack4x```中新增的```production```模式内部自动开启了很多通用的优化功能。第一个是一个叫做```define-plugin```的插件，用来为代码注入全局成员。在```production```模式下，默认这个插件就会启用并且往代码当中注入了一个```process.env.NODE_ENV```的常量。很多第三方模块都是通过这个成员判断当前的运行环境，从而去决定是否执行一些操作。
+
+```define-plugin```是一个内置的插件，先要导入```webpack```模块，```plugins```这个数组当中添加这个插件，插件的构造函数接收一个对象，对象中每一个键值都会被注入到代码中。
+
+```js
+plugins: [
+    new webpack.DefinePlugin({
+        API_BASE_URL: 'https://api.github.com'
+    })
+]
+```
+## Tree Shaking
+
+```Tree-shaking```字面意思是摇树，一般伴随着摇树动作树上的枯树枝和树叶就会掉落下来。不过这里摇掉的是代码当中那些没有用到的部分，更专业的叫未引用代码（```dead-code```）。
+
+```webpack```生产模式优化可以自动检测出代码中那些未引用的代码然后移除他们。
+
+需要注意的是```tree-shaking```并不是```webpack```中某一个配置选项，他是一组功能搭配使用过后的效果。打开```webpack```的配置文件添加```optimization```的属性。这个属性是集中配置```webpack```内部的一些优化功能。可以先开启```usedExports```选项，表示在输出结果中只导出那些外部使用了的成员。
+
+## sideEffects
+
+```weboack4```中还新增了一个叫做```sideEffects```的新特性。允许通过配置的方式标识代码是否有副作用，从而为```tree-shaking```提供更大的压缩空间。
+
+打开```webpack```的配置文件在```optimization```中开启属性```sideEffects: true```，这个特性在```production```模式下会自动开启。
+
+```js
+{
+    optimization: {
+        sideEffects: true
+        // usedExports: true,
+        // concatenateModules: true,
+        // minimize: true
+    }
+}
+```
+
+```webpack```在打包时就会先检查当前代码所属的这个```package.json```当中有没有```sideEffects```的标识，以此来判断这个模块是否有副作用。
+
+## 代码分割
+
+合理的打包方案应该是把打包结果按照一定的规则分离到多个```bundle```当中，根据应用的运行按需加载这些模块。这样的话就可以大大提高应用的响应速度以及运行效率。为了解决这样的问题```webpack```支持分包的功能，通过把模块按照所设计的规则打包到不同的```bundle```当中，从而提高应用的响应速度。
+
+目前```webpack```实现分包的方式主要有两种，第一种是根据业务去配置不同的打包入口，也就是会有多个打包入口同时打包，这时候就会输出多个打包结果。第二种是采用```ES Module```的动态导入功能实现模块的按需加载，这个时候```webpack```会自动的把需要动态导入的这个模块单独的输出到一个```bundle```中。
+
+### 提取公共模块
+
+配置文件中在```optimization```中添加```splitChunks```属性，这个属性需要配置```chunks```属性设置为```all```，表示会把所有的公共模块都提取到单独的```bundle```当中。
+
+```js
+module.exports = allModes.map(item => {
+    return {
+        optimization: {
+            splitChunks: {
+                chunks: 'all'
+            }
+        }
+    }
+})
+```
+### 魔法注释
+
+默认通过动态导入产生的```bundle```文件，名称只是一个序号，如果你需要给这些```bundle```命名可以使用```webpack```所特有的模板注释来去实现。
+
+调用```import```函数的参数位置添加一个行内注释，这个注释有一个特定的格式```/* webpackChunkName: 名称 */```这样的话就可以给分包所产生的```bundle```起上名字了。
+
+```js
+// mainElement.appendChild(album());
+import(/* webpackChunkName: album */'./album/album')
+```
+
+如果```chunkName```是相同的，最终就会被打包到一起。
+
+## MiniCssExtractPlugin
+
+```MiniCssExtractPlugin```是一个可以将```css```代码从打包结果中提取出来的插件，通过这个插可以实现```css```模块的按需加载。
+
+```js
+module: {
+    rules: [
+        {
+            test: /\.css$/,
+            use: [
+                MiniCssExtractPlugin.loader,
+                // 'style-loader',
+                'css-loader'
+            ]
+        }
+    ]
+},
+plugins: [
+    new CleanWebpackPlugin(),
+    new HtmlWebpackPlugin({
+        template: './src/index.html',
+        filename: `index.html`
+    }),
+    new MiniCssExtractPlugin()
+]
+```
+
+## OptimizeCssAssetsWebpackPlugin
+
+使用```MiniCssExtractPlugin```过后样式文件可以被提取到单独的```css```文件中但是样式文件没有压缩。这是因为```webpack```内置的压缩插件，紧紧是针对于```js```文件压缩，对于其他资源文件压缩，需要额外的插件支持。
+
+```js
+optimization: {
+    minimize: [
+        new OptimizeCssAssetsWebpackPlugin(),
+        new TerserWebpackPlugin()
+    ]
+}
+```
+## Hash文件名
+
+这里支持三种```hash```效果各不相同。
+
+```hash```可以通过```[hash]```设置，这个```hash```实际上是整个项目级别的，也就是说一旦项目中任何一个地方发生改动，打包过程中的```hash```值都会发生变化。
+
+
+```chunkhash```，这个```hash```是```chunk```级别的，只要是同一路的打包```chunkhash```都是相同的。
+
+```contenthash```是文件级别的```hash```，根据输出文件的内容生成的```hash```值，也就是说只要是不同的文件就有不同的```hash```值。
+
+```js
+new MiniCssExtractPlugin({
+    filename: '[name]-[contenthash:8].bundle.css'
+})
+```
+## 使用技巧
+
+polyfill会把js注入到全局变量中，污染全局，适合在项目中，不适合在插件和工具库中使用。plugin-transform-runtime以闭包的方式注入不会影响全局，适合工具库。
+
+## 实现打包原理
+
+创建入口```bundle.js```文件，创建```modules```函数用于分析模块内容。
+
+```js
+const fs = require('fs');
+const modules = function(entry) { // 接收一个入口文件
+    const content = fs.readFileSync(entry, 'utf-8');
+    console.log(content);
+}
+
+modules("./src/index.js");
+```
+
+拿到文件中的依赖模块。
+
+```s
+const fs = require('fs');
+const parser = require('@babel/parser');
+
+const modules = filename => {
+    const content = fs.readFileSync(filename, 'utf-8');
+    const Ast = parser.parse(content, {
+        sourceType: "module"
+    });
+    console.log(Ast.program.body);
+}
+
+modules('./index.js');
+```
+
+根据```body```里面的分析结果，遍历所有引入的模块。
+
+```js
+const fs = require('fs');
+const path = require('path');
+const traverse = require("@babel/traverse").default;
+const parser = require('@babel/parser');
+
+const modules = filename => {
+    const content = fs.readFileSync(filename, 'utf-8');
+    const Ast = parser.parse(content, {
+        sourceType: "module"
+    });
+    const dependencies = {};
+    traverse(Ast, {
+        ImportDeclaration({node}) {
+            const newfile = './' + path.join(path.dirname(filename), node.source.value);
+            // dependencies.push(node.source.value);
+            dependencies[node.source.value] = newfile;
+        }
+    });
+    console.log(dependencies);
+}
+
+modules('./index.js');
+```
+
+借助```@babel/core```和```@babel/preset-env```把```ast```语法树转换成合适的代码。
+
+```js
+const babel = require('@babel/core');
+const { code } = babel.transformFromAst(Ast, null, {
+    presets: ['@babel/preset-env']
+});
+return {
+    entry,
+    dependencies,
+    code
+}
+
+```
+
+把项目中的所有依赖都分析出来。```allModules```函数运行的时候会调用```modules```函数获取到源代码和依赖的模块，通过遍历将依赖的模块依次再传入```modules```函数，最终可以得到虽有的模块源代码以及他们之间的依赖关系。
+
+```js
+const allModules(filename) {
+    const entryModule = modules(filename);
+    // 使用队列存储所有
+    const yilaiArr = [entryModule];
+    for (let i = 0; i < yilaiArr.length; i++) {
+        const item = yilaiArr[i];
+        const { dependencies } = item;
+        if (dependencies) {
+            for (ket k in dependencies) {
+                yilaiArr.push(modules(dependencies[j]));
+            }
+        }
+    }
+    const obj = {};
+    yilaiArr.forEach(item => {
+        obj[item.filename] = {
+            dependencies: item.dependencies,
+            code: item.code
+        }
+    })
+    return obj;
+}
+```
+
+在最外层```getCode```函数中传入入口文件，```getCode```函数会将文件路径传递给```allModules```，从而获取所有模块和模块源代码，最后在```getCode```函数中返回一段可执行的```js```用于代码启动。
+
+```js
+const getCode = function(filename) {
+    consyt bundleInfo = JSON.stringfiy(allModules(filename));
+    return `
+        (function(all)) {
+            function require(module) {
+                function localPath(path) {
+                    return require(all[module].dependencies[path]);
+                }
+                const exports = {};
+                (function(require, code){
+                    eval(code);
+                })(localPath, exports, all[module].code);
+                return exports;
+            }
+            // 需要用字符串包裹一下参数
+            require('${filename}');
+        })(${bundleInfo})
+    `;
+}
+const info = getCode('./src/index.js');
+```
+
+## 模块联邦
+
+模块联邦(```Module Federation```)是```Webpack 5```中新增的一项功能，可以实现跨应用共享模块。比如有```AB```两个应用，```A```应用中提供```fromA```方法，```B```应用提供了```fromB```方法，现在需要在```A```应用中调用```B```应用的方法，```B```应用中调用```A```应用的方法。这就涉及到了跨应用调用方法，就需要用到模块联邦啦。
+
+要使用模块联邦首先需要导入```ModuleFederationPlugin```模块，他是```webpack```内置的模块，不需要额外安装。
+
+可以通过new实例化模块联邦插件，可以传入一个配置项。```filename```模块文件名称，```name```是模块名称，```exposes```指定导出的文件。
+
+```js
+// webpack.config.js
+// 导入模块联邦插件
+const ModuleFederationPlugin = require("webpack/lib/container/ModuleFederationPlugin")
+// 将 products 自身当做模块暴露出去 
+new ModuleFederationPlugin({
+	// 模块文件名称, 其他应用引入当前模块时需要加载的文件的名字 
+	filename: "remoteEntry.js",
+	// 模块名称, 具有唯一性, 相当于 single-spa 中的组织名称 
+	name: "products",
+	// 当前模块具体导出的内容 
+	exposes: {
+		"./index": "./src/index"
+	}
+})
+```
+
+在容器应用的中导入产品列表微应用，同样实例化```ModuleFederationPlugin```传入参数。```remotes```是要引入的模块。@前面是模块```name```，后面是```remoteEntry.js```就是```filename```。
+
+```js
+// webpack.config.js
+// 导入模块联邦插件
+const ModuleFederationPlugin = require("webpack/lib/container/ModuleFederationPlugin")
+new ModuleFederationPlugin({ 
+	name: "container",
+	// 配置导入模块映射
+	remotes: {
+		// 字符串 "products" 和被导入模块的 name 属性值对应
+		// 属性 products 是映射别名, 是在当前应用中导入该模块时使用的名字 
+		products: "products@http://localhost:8081/remoteEntry.js"
+	}
+})
+```
+
+配置之后就可以加载微应用了，通过```import```加载。```products```就是```remotes```中的```remotes```，```index```就是微应用```exposes```中的```index```。
+
+```js
+// src/index.js
+// 因为是从另一个应用中加载模块, 要发送请求所以使用异步加载方式 
+import("products/index").then(products => console.log(products))
+```
+
+共享模块
+
+```js
+{
+  shared: ["faker"] // 共享模块的名字，可以写多个。
+}
+```
+
+```webpack```配置中加入如下代码。
+
+```json
+shared: {
+  faker: {
+    singleton: true // 如果版本不一致使用高版本
+  }
+}
+```
