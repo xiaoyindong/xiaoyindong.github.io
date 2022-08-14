@@ -125,4 +125,124 @@ React.lazy() 和 <React.Suspense> 尚未在 ReactDOMServer 中支持。这是已
 
 ## key
 
-key 帮助 React 识别哪些元素改变了。元素的 key 最好是这个元素在列表中拥有的一个独一无二的字符串。当元素没有确定 id 的时候，万不得已
+key 帮助 React 识别哪些元素改变了。元素的 key 最好是这个元素在列表中拥有的一个独一无二的字符串。当元素没有确定 id 的时候，万不得已可以使用元素索引 index 作为 key。key 只是在兄弟节点之间必须唯一。
+
+递归 DOM 节点的子元素时，React 会同时遍历两个子元素的列表；当产生差异时，生成一个 mutation。当子元素拥有 key 时，React 使用 key 来匹配原有树上的子元素以及最新树上的子元素。相同的key会发生移动，而不是重新创建。当基于下标的组件进行重新排序时，组件 state 可能会遇到一些问题。由于组件实例是基于它们的 key 来决定是否更新以及复用，如果 key 是一个下标，那么修改顺序时会修改当前的 key，导致非受控组件的 state（比如输入框）可能相互篡改，会出现无法预期的变动。
+
+## 生命周期
+
+- render
+
+render() 方法是 class 组件中唯一必须实现的方法，会检查 this.props 和 this.state 的变化。
+
+- constructor
+
+在 React 组件挂载之前，会调用它的构造函数。避免将 props 的值复制给 state！这是一个常见的错误。
+
+- componentDidMount
+
+componentDidMount() 会在组件挂载后（插入 DOM 树中）立即调用。依赖于 DOM 节点的初始化应该放在这里。如需通过网络请求获取数据，此处是实例化请求的好地方。如果添加了订阅，请不要忘记在 componentWillUnmount() 里取消订阅。可以在 componentDidMount() 里直接调用 setState()。它将触发额外渲染，但此渲染会发生在浏览器更新屏幕之前。最好还是在constructor中初始化state。
+
+- componentDidUpdate
+
+componentDidUpdate() 会在更新后会被立即调用。首次渲染不会执行此方法。可以在 componentDidUpdate() 中直接调用 setState()，但请注意它必须被包裹在一个条件语句里，正如上述的例子那样进行处理，否则会导致死循环。
+
+- componentWillUnmount
+
+componentWillUnmount() 会在组件卸载及销毁之前直接调用。在此方法中执行必要的清理操作，例如，清除 timer，取消网络请求或清除在 componentDidMount() 中创建的订阅等。
+
+- shouldComponentUpdate
+
+根据 shouldComponentUpdate() 的返回值，判断 React 组件的输出是否受当前 state 或 props 更改的影响。默认行为是 state 每次发生变化组件都会重新渲染。如果 shouldComponentUpdate() 返回值为 false，则不会调用 componentDidUpdate()。首次渲染或使用 forceUpdate() 时不会调用该方法。不建议在 shouldComponentUpdate() 中进行深层比较或使用 JSON.stringify()。这样非常影响效率，且会损害性能。
+
+- static getDerivedStateFromProps
+
+getDerivedStateFromProps 会在调用 render 方法之前调用，并且在初始挂载及后续更新时都会被调用。它应返回一个对象来更新 state，如果返回 null 则不更新任何内容。
+
+- getSnapshotBeforeUpdate
+
+getSnapshotBeforeUpdate() 在最近一次渲染输出（提交到 DOM 节点）之前调用。它使得组件能在发生更改之前从 DOM 中捕获一些信息（例如，滚动位置）。此生命周期的任何返回值将作为 componentDidUpdate() 的第三个参数 “snapshot” 参数传递。应返回 snapshot 的值（或 null）。
+
+- Error boundaries
+
+Error boundaries 仅捕获组件树中以下组件中的错误。但它本身的错误无法捕获。
+
+static getDerivedStateFromError会在后代组件抛出错误后被调用。 它将抛出的错误作为参数，并返回一个值以更新 state。getDerivedStateFromError() 会在渲染阶段调用，因此不允许出现副作用。 如遇此类情况，请改用 componentDidCatch()。
+
+componentDidCatch在后代组件抛出错误后被调用。 它接收两个参数：error 抛出的错误和带有 componentStack key 的对象，其中包含有关组件引发错误的栈信息。
+
+错误边界无法捕获以下场景中产生的错误：事件处理、异步代码、服务端渲染、它自身抛出来的错误。
+
+自 React 16 起，任何未被错误边界捕获的错误将会导致整个 React 组件树被卸载。
+
+- UNSAFE_componentWillMount
+
+UNSAFE_componentWillMount() 在挂载之前被调用。它在 render() 之前调用，因此在此方法中同步调用 setState() 不会触发额外渲染。通常，我们建议使用 constructor() 来初始化 state。
+
+- UNSAFE_componentWillReceiveProps
+
+如果你需要执行副作用（例如，数据提取或动画）以响应 props 中的更改，请改用 componentDidUpdate 生命周期。如果你使用 componentWillReceiveProps 仅在 prop 更改时重新计算某些数据。在挂载过程中，React 不会针对初始 props 调用 UNSAFE_componentWillReceiveProps()。组件只会在组件的 props 更新时调用此方法。调用 this.setState() 通常不会触发 UNSAFE_componentWillReceiveProps()。
+
+- UNSAFE_componentWillUpdate
+
+当组件收到新的 props 或 state 时，会在渲染之前调用 UNSAFE_componentWillUpdate()。使用此作为在更新发生之前执行准备更新的机会。初始渲染不会调用此方法。
+
+此方法可以替换为 componentDidUpdate()。如果你在此方法中读取 DOM 信息（例如，为了保存滚动位置），则可以将此逻辑移至 getSnapshotBeforeUpdate() 中。
+
+- setState
+
+setState() 将对组件 state 的更改排入队列，并通知 React 需要使用更新后的 state 重新渲染此组件及其子组件。这是用于更新用户界面以响应事件处理器和处理服务器数据的主要方式
+
+将 setState() 视为请求而不是立即更新组件的命令。为了更好的感知性能，React 会延迟调用它，然后通过一次传递更新多个组件。React 并不会保证 state 的变更会立即生效。
+
+除非 shouldComponentUpdate() 返回 false，否则 setState() 将始终执行重新渲染操作。
+
+- forceUpdate
+
+调用 forceUpdate() 将致使组件调用 render() 方法，此操作会跳过该组件的 shouldComponentUpdate()。但其子组件会触发正常的生命周期方法，包括 shouldComponentUpdate() 方法。如果标记发生变化，React 仍将只更新 DOM。
+
+## ReactDOM
+
+- render
+
+在提供的 container 里渲染一个 React 元素，并返回对该组件的引用，如果 React 元素之前已经在 container 里渲染过，这将会对其执行更新操作，并仅会在必要时改变 DOM 以映射最新的 React 元素。
+
+- hydrate
+
+与 render() 相同，但它用于在 ReactDOMServer 渲染的容器中对 HTML 的内容进行 hydrate 操作。
+
+## ReactDOMServer
+
+- renderToString
+
+将 React 元素渲染为初始 HTML。React 将返回一个 HTML 字符串。你可以使用此方法在服务端生成 HTML。
+
+## 属性
+
+- checked
+
+组件的 type 类型为 checkbox 或 radio 时，组件支持 checked 属性
+
+- dangerouslySetInnerHTML
+
+dangerouslySetInnerHTML 是 React 为浏览器 DOM 提供 innerHTML 的替换方案。
+
+- htmlFor
+
+由于 for 在 JavaScript 中是保留字，所以 React 元素中使用了 htmlFor 来代替。
+
+- onChange
+
+onChange 事件与预期行为一致：每当表单字段变化时，该事件都会被触发。
+
+- selected
+
+```<option> ```组件支持 selected 属性。你可以使用该属性设置组件是否被选择。这对构建受控组件很有帮助。
+
+- suppressContentEditableWarning
+
+当拥有子节点的元素被标记为 contentEditable 时，React 会发出一个警告，因为这不会生效。该属性将禁止此警告。
+
+- suppressHydrationWarning
+
+如果你使用 React 服务端渲染，通常会在当服务端与客户端渲染不同的内容时发出警告。
