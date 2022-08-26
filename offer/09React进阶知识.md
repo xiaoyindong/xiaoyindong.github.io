@@ -129,4 +129,157 @@ Key 应该具有稳定，可预测，以及列表内唯一的特质。不稳定�
 
 ## useState实现
 
-先声明一下useState函数，返
+先声明一下useState函数，返回一个数组，接收初始值，定义一个state变量存储初始值。useState方法只能执行一次，所以需要处理一下，将state放在外面，如果有值不设置默认值，如果没有值再设置默认值。创建一个设置state值的方法，返回出去。并且更新state之后需要渲染视图render方法。
+
+```js
+const state = [];
+const setters = [];
+let stateIndex = 0;
+function createSetter (index) {
+    return function (newState) {
+        state[index] = newState;
+        render();
+    }
+}
+function useState (initialState) {
+    state[stateIndex] = state[stateIndex] ? state[stateIndex] : initialState;
+    setters.push(createSetter(stateIndex));
+    const value = state[stateIndex];
+    const setter = setters[stateIndex];
+    stateIndex++;
+    return [value, setter];
+}
+function render() {
+    stateIndex = 0;
+    ReactDOM.render(<App />, document.getElementById('root'));
+}
+```
+
+## useEffect钩子实现
+
+第一个参数必须是一个函数，第二个参数可以不传也可以传递一个数组，当不传递的时候组件当中任何一个数据发生变化的时候useEffect这个钩子函数每次都会执行，当传递第二个参数数组的时候，数组中定义状态数据，当状态数据改变的时候再执行。
+
+```js
+// 重新渲染函数
+function render() {
+    stateIndex = 0;
+    effectIndex = 0;
+    ReactDOM.render(<App />, document.getElementById('root'));
+}
+
+// 存储上一次的依赖值
+const preDepsAry = [];
+let effectIndex = 0;
+function useEffect(callback, depsAry) {
+    // 判断callback是否是函数
+    if (Object.prototype.toString.call(depsAry) !== '[object Array]') {
+        throw new Error('useEffect 函数的第二个参数必须是数组');
+    } else {
+        // 获取上一次的状态值
+        const prevDeps = preDepsAry[effectIndex];
+        // 如果存在就去做对比，如果不存在就是第一次执行
+        // // 将当前的依赖值和上一次的依赖值做对比， every如果返回true就是没变化，如果false就是有变化
+        const hasChanged = prevDeps ? depsAry.every((dep, index) => dep === prevDeps[index]) === false : true;
+        // 值如果有变化
+        if (hasChanged) {
+            callback();
+        }
+        // 同步依赖值
+        preDepsAry[effectIndex] = depsAry;
+        // 累加
+        effectIndex++;
+    }
+}
+```
+
+## useReducer钩子实现
+
+useReducer这个钩子函数是用来保存状态和处理状态的，他实际上是useState的增强版本，他集成了Redux的设计思想。
+
+useReducer要求第一个参数是一个函数，我们命名为reducer函数，第二个参数是状态值。返回值是一个数组，第一个值是状态值本身，第二个值是dispatch方法，通过调用dispatch方法可以更改状态值。
+
+```js
+// reducer和初始状态
+function useReducer(reducer, initialState) {
+    const [state, setState ] = useState(initialState);
+    function dispatch(action) {
+        const newState = reducer(state, action);
+        setState(newState);
+    }
+    return [state, dispatch];
+}
+```
+
+## 服务端原理
+
+webpack是运行在服务端也就是node端的，需要添加一个target为node的键值对，借助renderToString方法将Home组件转换为标签字符串。webpack会将服务代码和react代码打包到一起，输出的bundle文件直接用node运行就可以了。
+
+同构可以简单的理解同构就是让服务端和客户端执行一套代码，而不是分别针对两端写两套代码。比如给div绑定一个click事件，希望点击的时候可以弹出click提示。因为html是在服务器端渲染的，而服务端没办法绑定事件。
+
+
+一般的做法是先将页面渲染出来，然后将相同的代码在浏览器端像传统的React项目一样再去运行一遍，这样的话这个点击事件就有了。也就是一套React代码在服务器端执行一次，在客户端再执行一次。
+
+同构代码使用ReactDOM.hydrate代替ReactDOM.render。
+
+对于首屏展示需要的数据来说，一般是在组件上挂载一个data方法，里面编写ajax请求数据，这个方法可以在服务端调用，获取数据后将数据通过redux或者其它方式传递进入组件，这样renderToString拿到的就是有数据并且是完整的HTML结构。同时这个数据可以随html一同返回给浏览器，浏览器判断有数据就直接从内存中获取，而不需要再次发送ajax请求了。
+
+## 哪个版本的 React 包含了 Hook
+
+从 16.8.0 开始，React 在以下模块中包含了 React Hook
+
+## Hook 能否覆盖 class 的所有使用场景？
+
+目前暂时还没有对应不常用的 getSnapshotBeforeUpdate，getDerivedStateFromError 和 componentDidCatch 生命周期的 Hook 等价写法。
+
+## 生命周期方法对应 Hook
+
+constructor：函数组件不需要构造函数。你可以通过调用 useState 来初始化 state。如果计算的代价比较昂贵，你可以传一个函数给 useState。
+
+getDerivedStateFromProps：改为 在渲染时 安排一次更新。
+
+shouldComponentUpdate：详见 React.memo.
+
+render：这是函数组件体本身。
+
+componentDidMount, componentDidUpdate, componentWillUnmount：useEffect Hook 可以表达所有这些(包括 不那么 常见 的场景)的组合。
+
+getSnapshotBeforeUpdate，componentDidCatch 以及 getDerivedStateFromError：目前还没有这些方法的 Hook 等价写法，但很快会被添加。
+
+## 如何获取上一轮的 props 或 state？
+
+```js
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  const prevCountRef = useRef();
+  useEffect(() => {
+    prevCountRef.current = count;
+  });
+  const prevCount = prevCountRef.current;
+
+  return <h1>Now: {count}, before: {prevCount}</h1>;
+}
+```
+
+## 如何实现 getDerivedStateFromProps
+
+```js
+function ScrollView({row}) {
+  const [isScrollingDown, setIsScrollingDown] = useState(false);
+  const [prevRow, setPrevRow] = useState(null);
+
+  if (row !== prevRow) {
+    // Row 自上次渲染以来发生过改变。更新 isScrollingDown。
+    setIsScrollingDown(prevRow !== null && row > prevRow);
+    setPrevRow(row);
+  }
+
+  return `Scrolling down: ${isScrollingDown}`;
+}
+```
+
+## 如何实现 shouldComponentUpdate
+
+可以用 React.memo 包裹一个组件来对它的 props 进行浅比较：React.memo 等效于 PureComponent，但它只比较 props。（你也可以通过第二个参数指定一个自定义的比较函数来比较新旧 props。如果函数返回 true，就会跳过更新。）
+
+React.memo 不比较 state，因为没有单一的 state 对象可供比较。但你也可以让子节点变为纯组件，或者 用 useMemo 优化每一个具体的子节点。
