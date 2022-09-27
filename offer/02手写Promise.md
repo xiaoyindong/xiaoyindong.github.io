@@ -360,4 +360,336 @@ function resolvePromise (promise2, x, resolve, reject) {
     if ((x !== null && typeof x === 'object') || typeof x === 'function') {
         try {
             let then = x.then;
-          
+            if (typeof then === 'function') {
+                then.call(x, function (y) {
+                    if (called) { // 是否调用过
+                        return;
+                    }
+                    called = true;
+                    resolvePromise (promise2, y, resolve, reject)
+                }, function (r) {
+                    if (called) { // 是否调用过
+                        return;
+                    }
+                    called = true;
+                    reject(r);
+                });
+            } else { // 当前then是一个普通对象。
+                resolve(x)
+            }
+        } catch (e) {
+            if (called) { // 是否调用过
+                return;
+            }
+            called = true;
+            reject(e);
+        }
+    } else {
+        if (called) { // 是否调用过
+            return;
+        }
+        called = true;
+        resolve(x);
+    }
+}
+```
+
+如果Promise有多个then方法，只在最后一个then方法中传递了onFulfilled，需要将Promise的返回值传递过去的，也就是下面的代码需要内容输出，这叫值的穿透。
+
+```js
+p.then().then().then(function(data) {
+    console.log(data);
+})
+```
+
+假如用户没有传递onFulfilled或者传入的不是函数，可以给个默认值，也就是这个参数是一个可选参数。
+
+```js
+Primsie.prototype.then = function(onFulfilled, onRejected) {
+    onFulfilled = typeof onFulfilled === 'function' ? onFulfilled : function (data) { return data;};
+    onRejected = typeof onRejected === 'function' ? onRejected : function (err) { throw err;};
+}
+```
+
+调用executor的时候也可能会出错，只要Promise出现错误，就需要走到then的reject中。
+
+```js
+try {
+    executor(resolve, reject);
+} catch (e) {
+    reject(e);
+}
+```
+
+至此Promise就写完了，全部代码如下:
+
+```js
+function Promise (executor) {
+    var self = this;
+    self.status = 'pending';
+    self.value;
+    self.reason;
+    self.onResolvedCallbacks = []; // 存放所有成功的回调。
+    self.onRejectedCallbacks = []; // 存放所有失败的回调。
+    function resolve(value) {
+        if (self.status === 'pending') {
+            self.status = 'resolved';
+            self.value = value;
+            self.onResolvedCallbacks.forEach(function (fn) {
+                fn();
+            })
+        }
+    }
+
+    function reject(reason) {
+        if (self.status === 'pending') {
+            self.status = 'rejected';
+            self.reason = reason;
+            self.onRejectedCallbacks.forEach(function (fn) {
+                fn();
+            })
+        }
+    }
+    try {
+        executor(resolve, reject);
+    } catch (e) {
+        reject(e);
+    }
+}
+
+function resolvePromise (promise2, x, resolve, reject) {
+    if (promise2 === x) { // 防止自己等待自己
+        return reject(new TypeError('循环引用了'));
+    }
+    let called; // 表示Promise有没有被调用过
+    // x是object或者是个function
+    if ((x !== null && typeof x === 'object') || typeof x === 'function') {
+        try {
+            let then = x.then;
+            if (typeof then === 'function') {
+                then.call(x, function (y) {
+                    if (called) { // 是否调用过
+                        return;
+                    }
+                    called = true;
+                    resolvePromise (promise2, y, resolve, reject)
+                }, function (r) {
+                    if (called) { // 是否调用过
+                        return;
+                    }
+                    called = true;
+                    reject(r);
+                });
+            } else { // 当前then是一个普通对象。
+                resolve(x)
+            }
+        } catch (e) {
+            if (called) { // 是否调用过
+                return;
+            }
+            called = true;
+            reject(e);
+        }
+    } else {
+        if (called) { // 是否调用过
+            return;
+        }
+        called = true;
+        resolve(x);
+    }
+}
+
+Promise.prototype.then = function(onFulfilled, onRejected) {
+    onFulfilled = typeof onFulfilled === 'function' ? onFulfilled : function (data) { return data;};
+    onRejected = typeof onRejected === 'function' ? onRejected : function (err) { throw err;};
+    var self = this;
+    const promise2 = new Promise(function (resolve, reject) {
+        if (self.status === 'resolved') {
+            setTimeout(function() {
+                try {
+                    const x = onFulfilled(self.value);
+                    resolvePromise(promise2, x, resolve, reject);
+                } catch(e) {
+                    reject(e);
+                } 
+            }, 0)
+        }
+
+        if (self.status === 'rejected') {
+            setTimeout(function() {
+                try {
+                    const x = onRejected(self.reason);
+                    resolvePromise(promise2, x, resolve, reject);
+                } catch(e) {
+                    reject(e);
+                }
+            }, 0)
+        }
+        if (self.status === 'pending') {
+            self.onResolvedCallbacks.push(function () {
+                setTimeout(function() {
+                    try {
+                        const x = onFulfilled(self.value);
+                        resolvePromise(promise2, x, resolve, reject);
+                    } catch(e) {
+                        reject(e);
+                    }
+                }, 0)
+            });
+            self.onRejectedCallbacks.push(function() {
+                setTimeout(function() {
+                    try {
+                        const x = onRejected(self.reason);
+                        resolvePromise(promise2, x, resolve, reject);
+                    } catch(e) {
+                        reject(e);
+                    }
+                }, 0)
+            });
+        }
+    })
+    return promise2;
+}
+
+// 捕获失败的Promise，返回新的Promise
+Promise.prototype.catch = function(reject) {
+    return this.then(null, reject);
+}
+
+// 无论成功还是失败都会执行，并且最后返回原状态，返回新的Promise
+Promise.prototype.finally = function(handle) {
+    return this.then(function(value) {
+        return Promise.resolve(handle()).then(function() {
+            return value;
+        })
+    }, function (reason) {
+        return Promise.resolve(handle()).then(function() {
+            throw reason;
+        })
+    })
+}
+```
+
+## 静态方法实现
+
+```js
+// 只要有一个失败就返回，否则返回所有Promise的结果list
+Promise.all = function (values) {
+    return new Promise(function (resolve, reject) {
+        values = Array.isArray(values) ? values : []; 
+        if (values.length === 0) {
+            resolve(values);
+        }
+        var arr = []; // 最终结果的数组
+        var index = 0;
+        function processData (key, value) {
+            index++;
+            arr[key] = value;
+            if (index === values.length) {
+                resolve(arr);
+            }
+        }
+
+        for (var i = 0; i < values.length; i++) {
+            var current = values[i];
+            if (current && current.then && typeof current.then === 'function') {
+                current.then(function(y) {
+                    processData(i, y);
+                }, reject);
+            } else {
+                processData(i, current);
+            }
+        }
+    });
+}
+
+// 只要有一个完成就返回
+Promise.race = function (values) {
+    return new Promise(function (resolve, reject) {
+        for (var i = 0; i < values.length; i++) {
+            var current = values[i];
+            if (current && current.then && typeof current.then === 'function') {
+                current.then(resolve, reject);
+            } else {
+                resolve(current);
+            }
+        }
+    });
+}
+
+// 返回一个成功的Promise，如果入参是Promise直接返回
+Promise.resolve = function(value){
+    if (value && value.then && typeof value === 'function') {
+        return value;
+    }
+    return new Promise((resolve,reject)=>{
+        resolve(value);
+    });
+}
+
+// 返回一个失败的Promise，如果入参是Promise，直接返回
+Promise.reject = function(reason){
+    if (reason && reason.then && typeof reason === 'function') {
+        return value;
+    }
+    return new Promise((resolve,reject)=>{
+        reject(reason);
+    });
+}
+
+// 任意一个传入的Promise成功则成功，否则返回所有Promise结果的list。
+Promise.any = function (values) {
+    return new Promise(function(resolve, reject) {
+        let errs = [];
+        values.forEach((item, idx) => {
+            if (item instanceof Promise) {
+                item.then(function(value) {
+                    resolve(value);
+                }, function(err) {
+                    errs[idx] = err;
+                    if(errs.length === values.length) {
+                        reject(errs);
+                    }
+                })
+            } else {
+                resolve(value);
+            }
+        })
+    })
+}
+
+// 返回所有传入的promise对象结果值
+Promise.allsettled = function(values) {
+    return new Promise(function(resolve, reject) {
+        var list = [];
+        function ret (list) {
+            if (list.length === values.length) {
+                resolve(list);
+            }
+        }
+        values.forEach((item, idx) => {
+            if (item instanceof Promise) {
+                item.then(function(value) {
+                    list[idx] = {
+                        status: 'fulfilled',
+                        value,
+                    }
+                    ret(list);
+                }, function(rea) => {
+                    list[idx] = {
+                        status: 'rejected',
+                        reason: rea,
+                    }
+                    ret(list);
+                })
+            } else {
+                list[idx] = {
+                    status: 'fulfilled',
+                    value: item,
+                }
+                ret(list);
+            }
+        })
+    })
+}
+```
