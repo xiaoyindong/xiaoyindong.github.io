@@ -1,4 +1,4 @@
-JavaScript诞生于1995年，主要包含ECMAScript，DOM，BOM。其中ECMA-262做为ECMAScript的标准规范，定义了该语言的语法，类型，语句，关键字，保留字，操作符以及对象。
+JavaScript诞生于1995年，主要包含ECMAScript，DOM，BOM。其中ECMA-262做为ECMAScript的标准规范，定义了该语言的语法，类型，语句，关键字，保留字，操作符以及对象。123
 
 ECMA-262的第一版本质上与Netscape的JavaScript1.1相同，只不过删除了所有针对浏览器的代码并作了一些较小的改动。ECAM-262要求支持Unicode标准，而且对象也变成了与平台无关的。
 
