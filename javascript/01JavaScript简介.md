@@ -16,4 +16,32 @@ ECMA-262第七版，于2016年发布，只包含少量语法层面的增强，�
 
 ECMA-262第八版，完成于2017年6月，增加了异步函数，SharedArrayBuffer，Object.values、Object.entries、Object.getOwnPropertyDescriptors。
 
-ECMA-262第九版，发布于2018年6月，支持异步迭代，剩余属性，Promise.final
+ECMA-262第九版，发布于2018年6月，支持异步迭代，剩余属性，Promise.finally等。
+
+ECMA-262第十版，发布于2019年6月，增加了Array.prototype.flat/flatMap、String.prototype.trimStart/trimEnd、Object.fromEntries、Symbol.prototype.description。明确了Function.prototype.toString返回值，固定了Array.prototype.sort顺序以及catch可先绑定。
+
+## DOM 文档对象模型
+
+1998年10月，DOM Level 1称为W3C的推荐标准，由DOM Core 和 DOM HTML组成。DOM Level 1的目标是映射文档结构。
+
+DOM Level 2增加了对鼠标和用户界面的事件、范围、遍历的持之，并且支持了CSS。
+
+DOM Level 3增加了统一加载和保存文档的方法，验证文档的模块。
+
+目前W3C不再按照Level来维护DOM了，改为DOM Living Standard来维护，称为DOM4，新增的内容包括替代Mutation Events的Mutation Observers。
+
+DOM Level 0并不存在，只是一个参照点，可以看做是IE4和网景4最初支持的DHTML。
+
+## BOM 浏览器对象模型
+
+用于支持访问和操作浏览器的接口，在H5以前他是没有相关标准的JavaScript实现，H5的出现统一了BOM接口的实现标准。
+
+BOM 主要针对浏览器窗口和子窗口，比如弹出新窗口，移动，缩放和关闭窗口，navigator对象，location对象，screen对象，performance对象，对cookie的支持，还有XMLHttpRequest。
+
+## 小结
+
+JavaScript是一门用来与网页交互的脚本语言，包含ECMAScript、DOM、BOM。
+
+ECMAScript由ECMA-262定义并提供核心功能。文档对象模型提供与网页内容交互的方法和接口。浏览器对象模型提供了浏览器交互的方法和接口。
+
+JavaScript的这三个部分得到了五大浏览器(IE、Firefox、Chrome、Safari和Opera)不同程度的支持。所有浏览器基本对ES5提供了完善的支持，而对ES6和ES7的支持度也在不断提升。这些浏览器对DOM的支持各不相同，但对Level 3的支持日趋规范。HTML5中收录的BOM会因浏览器而异，不过开发者仍然可以假定存在很大的一部分公共特性。
