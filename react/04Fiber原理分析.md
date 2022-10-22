@@ -451,4 +451,462 @@ effects数组就是存储fiber对象的，我们要将所有的fiber对象存储
 
 所有的节点都有effects对象，最外层节点负责存储所有的fiber对象，其他节点负责收集fiber对象。然后汇总到最外层。我们可以在循环代码中加入这段逻辑。
 
-在while循环中currentExecutelyFiber是正在操作的fiber对象，可以找到父级的effects数组。我们让这个数组等于自有的值加上当前currentExecutelyFiber的effe
+在while循环中currentExecutelyFiber是正在操作的fiber对象，可以找到父级的effects数组。我们让这个数组等于自有的值加上当前currentExecutelyFiber的effects的值加上当前的currentExecutelyFiber。
+
+```js
+while (currentExecutelyFiber.parent) {
+    // 当前父级的effects存储当前的effects和当前对象。
+    currentExecutelyFiber.parent.effects = currentExecutelyFiber.parent.effects.concat(currentExecutelyFiber.effects.concat(currentExecutelyFiber))
+    // 有同级返回同级
+    if (currentExecutelyFiber.sibling) {
+        return currentExecutelyFiber.sibling
+    }
+    // 没有同级将父级给到循环，循环检查父级
+    currentExecutelyFiber = currentExecutelyFiber.parent
+}
+```
+
+这样我们就将所有的子级对象存储到父级的effects里面了。
+
+## 实现初始渲染
+
+当循环执行完毕的时候currentExecutelyFiber存储的就是最外层的节点对象，通过他的effects我们就可以拿到所有节点的fiber对象。接着我们就可以进入到fiber算法的第二个阶段了构建DOM节点的关系，构建完成之后添加到页面中。
+
+这里首先我们要把currentExecutelyFiber改成全局变量，因为我们要传递下去。定义pendingCommit来接收这个变量。
+
+```js
+const executeTask = fiber => {
+    ...
+    pendingCommit = currentExecutelyFiber;
+}
+```
+
+当fiber构建完成之后会执行到workLoop函数的循环下面，我们在这里判断pendingCommit是否存在，如果存在就调用方法传入这个参数。
+
+```js
+const workLoop = deadline => {
+    // 如果子任务不存在获取一个任务
+    if (!subTask) {
+        subTask = getFirstTask()
+    }
+    // 任务存在并且浏览器空余时间大于1ms执行任务
+    while (subTask && deadline.timeRemaining() > 1) {
+        subTask = executeTask(subTask);
+    }
+    // 执行第二阶段
+    if (pendingCommit) {
+        commitAllWork(pendingCommit)
+    }
+}
+```
+
+在commitAllWork这个方法中我们循环effects数组, 如果他的effectTag类型是placement也就是新增节点的时候，我们就将它append到父级中。
+
+```js
+const commitAllWork = fiber => {
+    fiber.effects.forEach(item => {
+        // 追加节点
+        if (item.effectTag === 'placement') {
+            item.parent.stateNode.appendChild(item.stateNode);
+        }
+    })
+}
+```
+
+## 渲染类组件
+
+我们要把类组件当中返回的内容渲染到页面中，我们getTag方法中需要返回这种类型。
+
+```js
+const getTag = vdom => {
+    // 如果是普通节点
+    if (typeof vdom.type === 'string') {
+        return 'host_component'
+    } else if (Object.getPrototypeOf(vdom.type) === Component) {
+        // 如果是类组件
+        return 'class_component'
+    } else {
+        // 函数组件
+        return 'function_component'
+    }
+}
+```
+
+接着我们还要去处理stateNode属性，如果他是普通节点就存储节点DOM对象，如果是组件就存储组件的实例对象，在createStateNode这个方法中处理这种逻辑。
+
+如果是组件分为类组件和函数组件，我们也要通过一个方法来判断。createReactInstance()。
+
+```js
+const createStateNode = fiber => {
+    // 普通节点
+    if (fiber.tag === 'host_component') {
+        return createDOMElement(fiber)
+    } else {
+        // 组件
+        return createReactInstance()
+    }
+}
+```
+
+区分函数组件和类组件在fiber对象中有个tag属性，如果他的值是class_component就是类组件否则就是函数组件。如果是类组件就返回构造函数, 如果是函数组件就直接等于type就可以了。
+
+```js
+createReactInstance = fiber => {
+    let instance = null;
+    
+    if (fiber.tag === 'class_component') {
+        instance = new fiber.type(fiber.props)
+    } else {
+        instance = fiber.type;
+    }
+    return instance;
+}
+```
+
+现在我们就将stateNode值和tag值处理好了，接下来我们在调用reconcileChildren方法的时候父级参数应该是fiber，子级参数应该是render方法中的返回值。所以我们在执行这个方法的时候不能直接传fiber.props.children，所以在executeTask函数调用reconcileChildren之前做一个判断，根据fiber的tag类型来处理。
+
+```js
+const executeTask = fiber => {
+    // 构建子级fiber对象
+    if (fiber.tag === 'class_component') {
+        reconcileChildren(fiber, fiber.stateNode.render())
+    } else {
+        reconcileChildren(fiber, fiber.props.children)
+    }
+    ...
+}
+```
+
+接着在commitAllWork方法中需要继续处理，类组件本身也是节点，但是类组件是不能追加DOM对象的，因为类组件本身就不是一个有效的DOM元素，我们要找到类组件的父级节点，他的父级一定要是普通的DOM元素，如果不是就继续查找直到找到，我们要往这个普通的DOM元素的父级里面去追加类组件返回的内容。
+
+```js
+const commitAllWork = fiber => {
+    fiber.effects.forEach(item => {
+        // 追加节点
+        if (item.effectTag === 'placement') {
+            let fiber = item;
+            let parentFiber = item.parent
+            while (parentFiber.tag === 'class_component') {
+                parentFiber = parentFiber.parent;
+            }
+            if (fiber.tag === 'host_component') {
+                parentFiber.stateNode.appendChild(fiber.stateNode);
+            }
+        }
+    })
+}
+```
+
+## 渲染函数组件
+
+在函数组件节点的Fiber中，stateNode存储的是函数组件的函数本身，tag存储的是function_component字符串，这个我们前面已经写完了。接下来我们要找到调用的地方也就是executeTask，当我们处理函数组件的时候他的子节点需要通过调用函数组件得到，我们添加一个else，如果处理的是函数组件。
+
+```js
+ if (fiber.tag === 'class_component') {
+    reconcileChildren(fiber, fiber.stateNode.render())
+} else if (fiber.tag === 'function_component') {
+    reconcileChildren(fiber, fiber.stateNode(fiber.props))
+} else {
+    reconcileChildren(fiber, fiber.props.children)
+}
+```
+
+接着我们进入到commitAllWork中，我们循环中不光要判断父级是类组件，还要判断是函数组件，如果是函数组件他本身也不能追加真实的DOM元素，同样要寻找普通DOM节点的祖先级。
+
+```js
+while (parentFiber.tag === 'class_component' || parentFiber.tag === 'function_component') {
+    parentFiber = parentFiber.parent;
+}
+```
+
+我们也可以测试一下传递props参数，都是可以运行的。
+
+## 实现节点更新
+
+当DOM节点初始化完成之后我们要去备份旧的Fiber节点对象，再更新的时候我们要去查看旧的Fiber节点是否存在，如果存在就是更新操作，就去创建执行更新的Fiber节点对象。
+
+我们首先来备份节点对象，在reconciliation的commitAllWork方法中当DOM执行操作完成之后就可以备份Fiber节点对象了。我们将它备份到真实的DOM根节点对象中就可以了。
+
+```js
+fiber.stateNode.__rootFiberContainer = fiber;
+```
+
+接下来我们去创建fiber节点对象的getFirstTask方法中，我们需要添加一个alternate属性，存储的就是备份fiber对象。这样在新的根节点对象中就有这个备份了。
+
+```js
+const getFirstTask = () => {
+    // 从任务队列中获取任务
+    const task = taskQueue.pop();
+    // 返回最外层节点Fiber对象
+    return {
+        props: task.props,
+        stateNode: task.dom,
+        tag: 'host_root',
+        effects: [],
+        child: null,
+        alternate: task.dom.__rootFiberContainer
+    }
+}
+```
+
+接着我们要在reconcileChildren方法中判断要执行什么样的操作，从而去构建不同操作对应的fiber对象。我们先把备份节点获取到。
+
+如果有fiber.alternate对象就获取子节点，从fiber.alternate.child获取，表示子节点。这个时候fiber.alternate.child是备份子节点，while第一次循环的时候从children中获取到的element就是当前的子节点。
+
+```js
+let alternate = null;
+// 如果有对象就获取子节点
+if (fiber.alternate && fiber.alternate.child) {
+    // 如果找得到这个子节点就是children数组中的第一个节点的备份节点
+    alternate = fiber.alternate.child;
+}
+while (index < numberOfElements) {
+    // 子级虚拟DOM对象
+    element = arrifiedChildren[index];
+}
+```
+
+同时我们需要知道，只有第一个子节点是child，其余的都是sibling，所以我们更新alternate的时候要取sibling。
+
+```js
+// 更新alternate
+if (alternate && alternate.sibling) {
+    alternate = alternate.sibling;
+} else {
+    alternate = null;
+}
+```
+
+如果element存在，alternate不存在就是初始渲染, 如果都存在就是更新操作。更新操作要创建执行更新的Fiber对象，effectTag变为update, 还要把alternate存储起来。
+
+```js
+if (element && alternate) {
+    // 更新操作
+    newFiber = {
+        type: element.type,
+        props: element.props,
+        tag: getTag(element),
+        effects: [],
+        effectTag: 'update', // 新增
+        stateNode: null, // dom对象，暂时没有
+        parent: fiber,
+        alternate,
+    }
+    if (element.type === alternate.type)
+    newFiber.stateNode = createStateNode(newFiber);
+}
+```
+
+还要判断要更新的和备份的类型是否相同。如果类型不同就不做比对了，直接创新新的替换老的就可以的，如果类型相同就要进行比对操作。
+
+```js
+if (element.type === alternate.type) {
+    // 类型相同
+    newFiber.stateNode = alternate.stateNode;
+} else {
+    // 类型不同
+    newFiber.stateNode = createStateNode(newFiber);
+}
+```
+
+接着我们要在commitAllWork这个方法中增加更新的逻辑，如果item.effectTag是update就是更新。更新操作要判断节点相同和节点不同，所以我们也分为两种情况。
+
+```js
+if (item.effectTag === 'update') {
+    // 更新操作
+    if (item.type === item.alternate.type) {
+        // 节点类型相同
+    } else {
+        // 节点类型不同
+    }
+} else if (item.effectTag === 'placement') {
+```
+
+如果节点类型不同使用新节点替换旧节点就可以了，我们需要找到父级节点来操作。调用replaceChild, 如果节点类型相同直接更新操作就可以了。updateNodeElement第一个参数是要更新的DOM节点，第二个参数是新的虚拟DOM，第三个参数是旧的虚拟DOM。
+
+```js
+// 更新操作
+if (item.type === item.alternate.type) {
+    // 节点类型相同
+    updateNodeElement(item.stateNode, item, item.alternate);
+} else {
+    // 节点类型不同
+    item.parent.stateNode.replaceChild(item.stateNode, item.alternate.stateNode);
+}
+```
+
+我们这个代码还有一点问题，这里只能更新元素节点，不能更新文本节点我们还要完善updateNodeElement方法实现更新文本节点。
+
+我们在上部添加一段处理文本节点的逻辑，如果是文本节点就不让他向下执行了，因为下面的代码是执行元素节点的。
+
+我们要在这里面查看新的文本节点和旧的文本节点是否相同，如果不同就去更新。我们还需要判断一下当前的节点父级是否相同，如果相同再进行这种操作，如果不同需要额外处理。
+
+```js
+if (virtualDOM.type === 'text') {
+    if (newProps.textContent !== oldProps.textContent) {
+        // 判断父级节点是否相同，如果不同就将当前文本追加到父级
+        if (virtualDOM.parent.type !== oldVirtualDOM.parent.type) {
+            virtualDOM.parent.stateNode.appencChild(document.createTextNode(newProps.textContent))
+        } else {
+            // 新的文本节点替换旧的文本节点
+            virtualDOM.parent.stateNode.replaceChild(document.createTextNode(newProps.textContent), oldVirtualDOM.stateNode);
+        }
+    }
+    return;
+}
+```
+
+## 实现节点删除
+
+我们要在reconcileChildren方法中判断当前执行的是否是删除操作。如果是删除就去构建执行删除操作的Fiber节点对象，我们只需要判断element是否存在，如果element不存在，备份节点确存在那就是删除操作。
+
+```js
+// 如果element不存在，alternate存在，就是删除
+if (!element && alternate) {
+    // 删除节点
+    alternate.effectTag = 'delete'
+    // 添加到父级的effects数组中
+    fiber.effects.push(alternate);
+}
+```
+
+我们要更新循环条件，如果是空数组这个循环就进不来了，但是alternate是有可能存在的，所以要改成。
+
+```js
+while (index < numberOfElements || alternate) {
+```
+
+如果element不存在的话newFiber也是不存在的，所以我们在下面也要判断一下。
+
+```js
+// 如果第一个子节点就赋值到fiber上
+if (index == 0) {
+    fiber.child = newFiber;
+} else if (element) {
+    // 否则放在前一个的兄弟节点上
+    prevFiber.sibling = newFiber;
+}
+```
+
+最后我们要在commitAllWork中执行真正的DOM操作来删除节点，如果item.effectTag === 'delete'当前执行的就是删除操作。
+
+```js
+if (item.effectTag === 'delete') {
+    item.parent.stateNode.removeChild(item.stateNode);
+} else if (item.effectTag === 'update') {
+```
+
+## 类组件状态更新
+
+当组件状态发生改变的时候我们要将这个任务放在任务队列中，还要指定当浏览器空闲的时候执行，我们在Component类中添加setState方法，这个方法调用scheduleUpdate方法来进行更新。
+
+```js
+class Component {
+    constructor(props) {
+        this.props = props;
+    }
+
+    setState(partialState) {
+        scheduleUpdate(this, partialState)
+    }
+}
+```
+
+scheduleUpdate定义在reconciliation这个js中，目的是为了和之前的方法进行互相调用。这个方法接收组件实例对象和新的state两个参数。
+
+通过实例对象获取state，使用新的状态覆盖他就可以了。别忘了将这个更新的任务添加到任务队列中。from定义一种新的任务类型便于区分。
+
+最后别忘了添加requestIdleCallback(performTask)在浏览器空闲的时候执行任务队列。
+
+```js
+const scheduleUpdate = (instance, partialState) => {
+    taskQueue.push({
+        from: 'class_component',
+        instance,
+        partialState
+    })
+    requestIdleCallback(performTask)
+}
+```
+
+在getFirstTask获取任务这个方法中处理这种类型的任务。这里先返回不让他向下执行，要处理新的任务。
+
+```js
+const getFirstTask = () => {
+    // 从任务队列中获取任务
+    const task = taskQueue.pop();
+    if (task.from === 'class_component') {
+        return;
+    }
+    // 返回最外层节点Fiber对象
+    return {
+        props: task.props,
+        stateNode: task.dom,
+        tag: 'host_root',
+        effects: [],
+        child: null,
+        alternate: task.dom.__rootFiberContainer
+    }
+}
+```
+
+在commitAllWork的循环中要判断一下这里处理的是否是类组件，根据tag为class_component来判断。如果是类组件就在这个组件的实例对象身上添加备份属性存储fiber。
+
+```js
+if (item.tag === 'class_component') {
+    // 处理的是类组件
+    item.stateNode.__fiber = item;
+}
+```
+
+现在我们就在组件的实例对象上备份了组件的fiber对象。这样我们再getFirstTask的判断中就可以拿到组件的fiber对象了。task.instance.__fiber。
+
+```js
+if (task.from === 'class_component') {
+    const root = getRoot(task.instance);
+    return {
+        props: root.props,
+        stateNode: root.stateNode,
+        tag: 'host_root',
+        effects: [],
+        child: null,
+        alternate: root // root就是备份
+    };
+}
+```
+
+我们向上查找直到找到最外层节点对象。
+
+```js
+const getRoot = instance => {
+let fiber = instance.__fiber
+while (fiber.parent) {
+    fiber = fiber.parent
+}
+return fiber;
+}
+```
+
+下面我们就要去更新状态了，在更新之前我们需要把要更新的状态存储起来
+
+```js
+const root = getRoot(task.instance);
+// 将要更新的状态存储起来
+task.instance.__fiber.partialState = task.partialState;
+```
+
+在executeTask方法中，如果是类组件，我们就看partialState是否存在，如果存在就更新组件。
+
+```js
+// 构建子级fiber对象
+if (fiber.tag === 'class_component') {
+    // 更新state
+    if (fiber.stateNode.__fiber && fiber.stateNode.__fiber.partialState) {
+        fiber.stateNode.state = {
+            ...fiber.stateNode.state,
+            ...fiber.stateNode.__fiber.partialState
+        }
+    }
+    reconcileChildren(fiber, fiber.stateNode.render())
+} else if (fiber.tag === 'function_component') {
+```
