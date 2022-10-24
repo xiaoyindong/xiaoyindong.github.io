@@ -34,4 +34,51 @@ getSnapshotBeforeUpdate，componentDidCatch 以及 getDerivedStateFromError：�
 
 ## 6. 有类似实例变量的东西吗
 
-有！useRef() Hook 不仅可以用于 DOM refs。「ref」 对象是一个 c
+有！useRef() Hook 不仅可以用于 DOM refs。「ref」 对象是一个 current 属性可变且可以容纳任意值的通用容器，类似于一个 class 的实例属性。
+
+## 7. 如何获取上一轮的 props 或 state？
+
+```js
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  const prevCountRef = useRef();
+  useEffect(() => {
+    prevCountRef.current = count;
+  });
+  const prevCount = prevCountRef.current;
+
+  return <h1>Now: {count}, before: {prevCount}</h1>;
+}
+```
+
+## 8. 我该如何实现 getDerivedStateFromProps？
+
+```js
+function ScrollView({row}) {
+  const [isScrollingDown, setIsScrollingDown] = useState(false);
+  const [prevRow, setPrevRow] = useState(null);
+
+  if (row !== prevRow) {
+    // Row 自上次渲染以来发生过改变。更新 isScrollingDown。
+    setIsScrollingDown(prevRow !== null && row > prevRow);
+    setPrevRow(row);
+  }
+
+  return `Scrolling down: ${isScrollingDown}`;
+}
+```
+
+## 9. 我该如何实现 shouldComponentUpdate?
+
+可以用 React.memo 包裹一个组件来对它的 props 进行浅比较：React.memo 等效于 PureComponent，但它只比较 props。（你也可以通过第二个参数指定一个自定义的比较函数来比较新旧 props。如果函数返回 true，就会跳过更新。）
+
+React.memo 不比较 state，因为没有单一的 state 对象可供比较。但你也可以让子节点变为纯组件，或者 用 useMemo 优化每一个具体的子节点。
+
+## 10. 如何惰性创建昂贵的对象
+
+如果依赖数组的值相同，useMemo 允许你 记住一次昂贵的计算。但是，这仅作为一种提示，并不保证计算不会重新运行。但有时候需要确保一个对象仅被创建一次。
+
+## 11. Hook 会因为在渲染时创建函数而变慢吗？
+
+不会。在现代浏览器中，闭包和类的原始性能只有在极端场景下才会有明显的差别。
